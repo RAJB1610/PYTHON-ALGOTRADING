@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Connecting Kite…</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Syne',sans-serif;background:#F2F4F9;display:flex;align-items:center;justify-content:center;min-height:100vh}
+  .card{background:#fff;border-radius:14px;padding:36px 40px;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:380px;width:90%}
+  .logo{font-size:17px;font-weight:800;margin-bottom:24px;color:#111}
+  .logo span{color:#1D9E75}
+  .spinner{width:40px;height:40px;border:3px solid #E5E7EB;border-top-color:#1D9E75;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 18px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  h2{font-size:15px;font-weight:700;margin-bottom:8px;color:#111}
+  p{font-size:12px;color:#6272A0;line-height:1.6}
+  .ok{color:#0F6E56;font-size:36px;margin-bottom:12px}
+  .err{color:#A32D2D;font-size:36px;margin-bottom:12px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">Trade<span>Signal</span> Pro</div>
+  <div id="state">
+    <div class="spinner"></div>
+    <h2>Connecting to Kite…</h2>
+    <p>Exchanging login token. Do not close this window.</p>
+  </div>
+</div>
+
+<script>
+(async () => {
+  const params   = new URLSearchParams(location.search);
+  const reqToken = params.get("request_token");
+  const el       = document.getElementById("state");
+
+  if (!reqToken) {
+    el.innerHTML = `<div class="err">✗</div><h2>No token received</h2><p>Zerodha did not send a request token. Please try again.</p>`;
+    return;
+  }
+
+  try {
+    const res  = await fetch("/.netlify/functions/kite-auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ request_token: reqToken })
+    });
+    const data = await res.json();
+
+    if (data.ok && data.access_token) {
+      // Store access token in localStorage for the main app to use
+      localStorage.setItem("kite_access_token", data.access_token);
+      localStorage.setItem("kite_token_ts",     Date.now().toString());
+
+      el.innerHTML = `<div class="ok">✓</div><h2>Kite connected!</h2><p>Redirecting to your portfolio…</p>`;
+      setTimeout(() => { location.href = "/?kite=connected"; }, 1200);
+    } else {
+      throw new Error(data.error || "Auth failed");
+    }
+  } catch (e) {
+    el.innerHTML = `<div class="err">✗</div><h2>Connection failed</h2><p>${e.message}</p><br><a href="/" style="font-size:12px;color:#1D9E75">← Back to app</a>`;
+  }
+})();
+</script>
+</body>
+</html>

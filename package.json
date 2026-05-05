@@ -1,0 +1,7 @@
+{
+  "name": "tradesignal-pro-v2",
+  "version": "2.0.0",
+  "description": "Live NSE Stock Screener — Technical Signals + Fundamentals",
+  "engines": { "node": ">=18" },
+  "private": true
+}

@@ -1,0 +1,128 @@
+exports.handler = async (event) => {
+  const H = { "Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"Content-Type","Content-Type":"application/json" };
+  if (event.httpMethod==="OPTIONS") return {statusCode:200,headers:H,body:""};
+  if (!process.env.ANTHROPIC_API_KEY) return {statusCode:200,headers:H,body:JSON.stringify({ok:false,error:"API key not set"})};
+
+  let sym;
+  try { sym = JSON.parse(event.body||"{}").sym; }
+  catch { return {statusCode:400,headers:H,body:JSON.stringify({ok:false,error:"Bad body"})}; }
+  if (!sym) return {statusCode:400,headers:H,body:JSON.stringify({ok:false,error:"Missing sym"})};
+
+  const name = sym.replace(/-(T|BE|Z|N1|BZ|RE\d*-R)$/i,"");
+
+  // ── Step 1: Real-time RSS (no Claude, pure HTTP) ────────────────────────
+  const rssItems = await fetchGoogleNews(name);
+  if (!rssItems.length) {
+    return {statusCode:200,headers:H,body:JSON.stringify({ok:true,sym,news:[],note:"No recent news"})};
+  }
+
+  // Build URL lookup by index — avoids passing URLs through Claude
+  const urlMap = Object.fromEntries(rssItems.map((it,i) => [i, it.url]));
+
+  // ── Step 2: Claude categorises headlines only (clean, fast) ────────────
+  const headlineBlock = rssItems
+    .map((it,i) => `${i}: [${it.date}] ${it.title} | ${it.source}`)
+    .join("\n");
+
+  const prompt = `Categorise these recent Google News headlines for "${name}" (NSE/BSE India stock).
+Headlines are numbered 0 to ${rssItems.length-1}:
+
+${headlineBlock}
+
+Return ONLY a valid JSON array. Each entry MUST include the original index number. No markdown, no text outside the array:
+[{"idx":0,"title":"concise headline under 12 words","category":"Corporate Action|Deal/Order|Insider Trading|Results|Analyst|Regulatory|General","date":"date from headline","summary":"One sentence: what happened and its significance.","sentiment":"positive|negative|neutral","source":"source from headline"}]
+Include only headlines directly about ${name}. Return 4-6 best items. If none apply, return [].`;
+
+  const ctrl = new AbortController();
+  const tid  = setTimeout(()=>ctrl.abort(), 7000);
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","x-api-key":process.env.ANTHROPIC_API_KEY,"anthropic-version":"2023-06-01"},
+      body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:800,messages:[{role:"user",content:prompt}]}),
+      signal:ctrl.signal
+    });
+    clearTimeout(tid);
+
+    if (!res.ok){
+      const e=await res.text().catch(()=>"");
+      return {statusCode:200,headers:H,body:JSON.stringify({ok:false,error:`API ${res.status}: ${e.slice(0,100)}`})};
+    }
+
+    const data  = await res.json();
+    const raw   = (data.content?.[0]?.text||"").trim();
+    const items = extractArray(raw);
+
+    // Attach URL from lookup map using the idx field Claude returns
+    const news = items.map(it => ({
+      ...it,
+      url: (it.idx !== undefined && urlMap[it.idx]) ? urlMap[it.idx] : ""
+    }));
+
+    return {statusCode:200,headers:H,body:JSON.stringify({ok:true,sym,news})};
+  } catch(e){
+    clearTimeout(tid);
+    return {statusCode:200,headers:H,body:JSON.stringify({ok:false,error:e.name==="AbortError"?"timeout":String(e.message)})};
+  }
+};
+
+// ── Google News RSS ─────────────────────────────────────────────────────────
+async function fetchGoogleNews(name) {
+  const since   = new Date(Date.now()-30*24*60*60*1000).toISOString().slice(0,10);
+  const queries = [
+    `"${name}" NSE India after:${since}`,
+    `${name} stock BSE NSE after:${since}`
+  ];
+  for (const q of queries){
+    try{
+      const ctrl = new AbortController();
+      setTimeout(()=>ctrl.abort(),3500);
+      const res  = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-IN&gl=IN&ceid=IN:en`,
+        {headers:{"User-Agent":"Mozilla/5.0"},signal:ctrl.signal});
+      if(!res.ok) continue;
+      const items = parseRSS(await res.text());
+      const cutoff= Date.now()-35*24*60*60*1000;
+      const fresh = items.filter(it=>{ try{return new Date(it.rawDate).getTime()>cutoff;}catch{return true;} });
+      if(fresh.length>=2) return fresh.slice(0,8);
+    } catch{}
+  }
+  return [];
+}
+
+// ── RSS parser ──────────────────────────────────────────────────────────────
+function parseRSS(xml) {
+  const items=[];
+  for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)){
+    const chunk=m[1];
+    const get  =tag=>{
+      const cd=chunk.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>`));
+      if(cd) return cd[1].trim();
+      const pl=chunk.match(new RegExp(`<${tag}[^>]*>([^<]*)<\\/${tag}>`));
+      return pl?pl[1].trim():"";
+    };
+    const title  = get("title");
+    const pubRaw = get("pubDate");
+    const source = chunk.match(/<source[^>]*>([^<]*)<\/source>/)?.[1]?.trim()||"Google News";
+    // URL: try <link>, then <guid>
+    const url    = (chunk.match(/<link>([^<]+)<\/link>/)?.[1] ||
+                    chunk.match(/<guid[^>]*>([^<]+)<\/guid>/)?.[1] || "").trim();
+    if(!title) continue;
+    const d=new Date(pubRaw);
+    const date=isNaN(d)?pubRaw.slice(0,16):d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"});
+    items.push({title,date,rawDate:pubRaw,source,url});
+  }
+  return items;
+}
+
+// ── JSON array extractor ────────────────────────────────────────────────────
+function extractArray(text){
+  const blocks=[];let depth=0,start=-1;
+  for(let i=0;i<text.length;i++){
+    if(text[i]==="["){if(!depth)start=i;depth++;}
+    else if(text[i]==="]"){depth--;if(!depth&&start>=0){blocks.push(text.slice(start,i+1));start=-1;}}
+  }
+  for(const b of blocks.reverse()){
+    try{const a=JSON.parse(b);if(Array.isArray(a)&&a.length)return a;}catch{}
+  }
+  return[];
+}

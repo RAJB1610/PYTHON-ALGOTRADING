@@ -1,0 +1,16 @@
+[build]
+  publish = "."
+  command = "echo Build complete"
+
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "KITE_API_KEY"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
