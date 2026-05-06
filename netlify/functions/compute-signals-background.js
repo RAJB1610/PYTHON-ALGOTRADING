@@ -101,7 +101,6 @@ async function fetchAllCandles(url, key, exchange, cutoff) {
     if (!Array.isArray(data) || !data.length) break;
     all.push(...data);
     offset += data.length;
-    if (data.length < PAGE) break;
   }
   return all;
 }
