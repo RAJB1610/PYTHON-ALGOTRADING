@@ -1459,8 +1459,8 @@ const COL = {
              "Security","SCRIP","Name","Equity","Share"],
   qty:      ["Quantity","quantity","qty","Qty","Shares","shares","QUANTITY","Holdings",
              "Net Quantity","Qty.","net qty","Balance","Bal","Units","Holding Qty"],
-  avgPrice: ["Avg. cost","Avg. Cost","Avg. Cost Price","Average Price","avg_price",
-             "Avg Price","Buy Price","Purchase Price","Average Cost","Avg Cost",
+  avgPrice: ["Cost Per Share","Avg. cost","Avg. Cost","Avg. Cost Price","Average Price",
+             "avg_price","Avg Price","Buy Price","Purchase Price","Average Cost","Avg Cost",
              "avgprice","Cost Price","average buy price","avg cost price",
              "Average Buy Price","Avg. Price","Net Rate","Net Avg","Avg Rate",
              "Average Rate","Cost Basis","Avg Buyprice","Average Cost Price",
@@ -1581,14 +1581,33 @@ function parseCSV(text) {
 }
 
 function parseCSVWithHeader(lines, delim, idx) {
-  return lines.slice(1).map(line => {
-    const c = splitRow(line, delim);
-    const sym = c[idx.sym]?.replace(/\s+/g,"").replace(/[^A-Z0-9&-]/gi,"").toUpperCase();
-    const qty = parseFloat(c[idx.qty]?.replace(/,/g,""));
-    const avg = parseFloat(c[idx.avg]?.replace(/[₹,\s]/g,""));
-    const cmp = idx.cmp>=0 ? parseFloat(c[idx.cmp]?.replace(/[₹,\s]/g,""))||null : null;
-    return (sym&&qty>0&&avg>0) ? {sym, qty, avgPrice:+avg.toFixed(2), cmp:cmp&&!isNaN(cmp)?+cmp.toFixed(2):null} : null;
+  const rows = lines.slice(1).map(line => {
+    const c    = splitRow(line, delim);
+    const raw  = c[idx.sym]?.trim() || "";
+    // Preserve .NS / .BO suffix as yf exchange indicator before stripping special chars
+    const sfxMatch = raw.match(/\.(NS|BO)$/i);
+    const yf   = sfxMatch ? raw.toUpperCase() : null;
+    const sym  = raw.replace(/\.(NS|BO|NSE|BSE)$/i, "").replace(/\s+/g,"").replace(/[^A-Z0-9&-]/gi,"").toUpperCase();
+    const qty  = parseFloat(c[idx.qty]?.replace(/,/g,""));
+    const avg  = parseFloat(c[idx.avg]?.replace(/[₹,\s]/g,""));
+    const cmp  = idx.cmp>=0 ? parseFloat(c[idx.cmp]?.replace(/[₹,\s]/g,""))||null : null;
+    if (!sym || !(qty>0) || !(avg>0)) return null;
+    return { sym, qty, avgPrice:+avg.toFixed(2), cmp:cmp&&!isNaN(cmp)?+cmp.toFixed(2):null, yf: yf || sym+".NS" };
   }).filter(Boolean);
+
+  // Deduplicate: aggregate multiple Buy rows for same symbol (weighted avg price)
+  const map = {};
+  for (const r of rows) {
+    if (map[r.sym]) {
+      const e = map[r.sym];
+      const totalQty = e.qty + r.qty;
+      e.avgPrice = +((e.qty * e.avgPrice + r.qty * r.avgPrice) / totalQty).toFixed(2);
+      e.qty = totalQty;
+    } else {
+      map[r.sym] = { ...r };
+    }
+  }
+  return Object.values(map);
 }
 
 function parseJSON(text) {
