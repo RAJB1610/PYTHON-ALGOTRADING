@@ -1,64 +1,41 @@
-// Background function (15-min timeout) — syncs today's EOD OHLCV for all NSE + BSE EQ stocks.
-// Reads Kite access token from Supabase settings table (saved there by kite-auth.js).
-// Run after market close (after 15:45 IST) for accurate EOD data.
-// Kite note: last_price after close = closing price; ohlc.close = previous day's close (reference only).
+// Downloads NSE + BSE official bhavcopy EOD files → stores OHLCV in Supabase.
+// No Kite auth required. Run after 18:00 IST when exchanges publish the files.
+// Optional query params: ?date=YYYYMMDD  ?exchange=NSE|BSE
 
-const KITE_BATCH  = 200;  // instruments per Kite /quote call (conservative for URL length)
-const SB_BATCH    = 1000; // rows per Supabase upsert
-const CONCURRENCY = 4;    // parallel Kite API calls
+const SB_BATCH = 1000;
 
 exports.handler = async (event) => {
   const H = { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" };
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: H, body: "" };
 
-  const { SUPABASE_URL, SUPABASE_SERVICE_KEY, KITE_API_KEY } = process.env;
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !KITE_API_KEY)
-    return { statusCode: 500, headers: H, body: JSON.stringify({ ok: false, error: "Missing env vars: SUPABASE_URL, SUPABASE_SERVICE_KEY, KITE_API_KEY" }) };
+  const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY)
+    return { statusCode: 500, headers: H, body: JSON.stringify({ ok: false, error: "Supabase env vars missing" }) };
+
+  const dateParam     = event.queryStringParameters?.date     || null;
+  const exchangeParam = event.queryStringParameters?.exchange?.toUpperCase() || null;
 
   try {
-    // 1 — Get stored Kite access token
-    const tokenRes  = await sbFetch(SUPABASE_URL, SUPABASE_SERVICE_KEY,
-      "/rest/v1/settings?key=eq.kite_access_token&select=value&limit=1");
-    const tokenRows = await tokenRes.json();
-    const access_token = tokenRows?.[0]?.value;
-    if (!access_token)
-      throw new Error("No Kite access token found in settings. Log in via Kite first.");
+    const date      = dateParam || getLastTradingDay();
+    const exchanges = exchangeParam ? [exchangeParam] : ["NSE", "BSE"];
+    const rows      = [];
+    const errors    = [];
 
-    // 2 — Load all EQ instruments from Supabase (paginated, Supabase default page = 1000)
-    const instruments = await fetchAllInstruments(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    if (!instruments.length)
-      throw new Error("Instruments table is empty. Run sync-instruments first.");
-
-    // 3 — Batch instruments → Kite /quote API with limited concurrency
-    const today   = toIST(new Date()).split("T")[0]; // YYYY-MM-DD in IST
-    const batches = chunk(instruments, KITE_BATCH);
-    const candles = [];
-
-    for (let i = 0; i < batches.length; i += CONCURRENCY) {
-      const results = await Promise.all(
-        batches.slice(i, i + CONCURRENCY).map(b => fetchQuotes(b, KITE_API_KEY, access_token))
-      );
-      for (const quotes of results) {
-        for (const [key, q] of Object.entries(quotes)) {
-          const [exch, sym] = key.split(":");
-          candles.push({
-            instrument_token: q.instrument_token,
-            tradingsymbol:    sym,
-            exchange:         exch,
-            date:             today,
-            open:             q.ohlc?.open  ?? null,
-            high:             q.ohlc?.high  ?? null,
-            low:              q.ohlc?.low   ?? null,
-            close:            q.last_price  ?? null,
-            volume:           q.volume      ?? null
-          });
-        }
+    for (const exchange of exchanges) {
+      try {
+        const csv    = await fetchBhavcopy(exchange, date);
+        const parsed = parseBhavcopy(csv, exchange);
+        rows.push(...parsed);
+      } catch (e) {
+        errors.push(`${exchange}: ${e.message}`);
       }
     }
 
-    // 4 — Upsert candles to Supabase
-    const candleBatches = chunk(candles, SB_BATCH);
-    for (const batch of candleBatches) {
+    if (!rows.length)
+      throw new Error(`No data. ${errors.join(" | ")} — market may be closed on ${date} or files not yet published.`);
+
+    // Upsert to Supabase in batches
+    for (let i = 0; i < rows.length; i += SB_BATCH) {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/daily_candles`, {
         method: "POST",
         headers: {
@@ -67,74 +44,125 @@ exports.handler = async (event) => {
           "Content-Type": "application/json",
           Prefer:         "resolution=merge-duplicates,return=minimal"
         },
-        body: JSON.stringify(batch)
+        body: JSON.stringify(rows.slice(i, i + SB_BATCH))
       });
       if (!res.ok) {
         const err = await res.text();
-        throw new Error(`Supabase candle upsert failed: ${err.slice(0, 300)}`);
+        throw new Error(`Supabase upsert failed: ${err.slice(0, 300)}`);
       }
     }
 
     return {
       statusCode: 200,
       headers: H,
-      body: JSON.stringify({ ok: true, date: today, synced: candles.length, instruments: instruments.length })
+      body: JSON.stringify({
+        ok: true, date,
+        synced: rows.length,
+        nse:    rows.filter(r => r.exchange === "NSE").length,
+        bse:    rows.filter(r => r.exchange === "BSE").length,
+        errors: errors.length ? errors : undefined
+      })
     };
   } catch (e) {
     return { statusCode: 200, headers: H, body: JSON.stringify({ ok: false, error: e.message }) };
   }
 };
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+// ── Fetch ───────────────────────────────────────────────────────────────────
 
-async function fetchAllInstruments(url, key) {
-  const all  = [];
-  const PAGE = 1000;
-  let offset = 0;
-  while (true) {
-    const res  = await sbFetch(url, key,
-      `/rest/v1/instruments?select=instrument_token,tradingsymbol,exchange&instrument_type=eq.EQ&limit=${PAGE}&offset=${offset}`);
-    const data = await res.json();
-    if (!Array.isArray(data) || !data.length) break;
-    all.push(...data);
-    if (data.length < PAGE) break;
-    offset += PAGE;
-  }
-  return all;
-}
+const BHAVCOPY_URLS = {
+  NSE: date => `https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_${date}_F_0000.csv`,
+  BSE: date => `https://www.bseindia.com/download/BhavCopy/Equity/BhavCopy_BSE_CM_0_0_0_${date}_F_0000.csv`
+};
 
-async function fetchQuotes(instruments, apiKey, accessToken) {
-  const qs  = instruments.map(i => `i=${encodeURIComponent(`${i.exchange}:${i.tradingsymbol}`)}`).join("&");
-  const res = await fetch(`https://api.kite.trade/quote?${qs}`, {
+async function fetchBhavcopy(exchange, date) {
+  const url = BHAVCOPY_URLS[exchange]?.(date);
+  if (!url) throw new Error(`Unknown exchange: ${exchange}`);
+
+  const res = await fetch(url, {
     headers: {
-      "X-Kite-Version": "3",
-      Authorization:    `token ${apiKey}:${accessToken}`
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+      "Referer":         exchange === "NSE" ? "https://nseindia.com/" : "https://www.bseindia.com/"
     },
-    signal: AbortSignal.timeout(15000)
+    signal: AbortSignal.timeout(30000)
   });
-  if (!res.ok) throw new Error(`Kite /quote returned HTTP ${res.status}`);
-  const json = await res.json();
-  if (json.status !== "success") throw new Error(`Kite /quote error: ${json.message}`);
-  return json.data;
+
+  if (!res.ok) throw new Error(`HTTP ${res.status} — file may not be published yet`);
+  const text = await res.text();
+  if (text.trim().startsWith("<")) throw new Error("Got HTML instead of CSV — exchange blocked the request");
+  return text;
 }
 
-function sbFetch(url, key, path) {
-  return fetch(`${url}${path}`, {
-    headers: {
-      apikey:         key,
-      Authorization:  `Bearer ${key}`,
-      "Content-Type": "application/json"
-    }
-  });
+// ── Parse ───────────────────────────────────────────────────────────────────
+
+function parseBhavcopy(csv, exchange) {
+  const lines   = csv.trim().split("\n");
+  const headers = lines[0].split(",").map(h => h.trim().replace(/\r/g, ""));
+  const rows    = [];
+
+  for (const line of lines.slice(1)) {
+    if (!line.trim()) continue;
+    const vals = line.split(",");
+    const r    = Object.fromEntries(headers.map((h, i) => [h, (vals[i] ?? "").trim().replace(/\r/g, "")]));
+
+    if (!shouldInclude(r, exchange)) continue;
+
+    const open   = parseFloat(r.OpnPric);
+    const high   = parseFloat(r.HghPric);
+    const low    = parseFloat(r.LwPric);
+    const close  = parseFloat(r.ClsPric);
+    const volume = parseInt(r.TtlTradgVol, 10);
+
+    if (!close || close <= 0) continue;
+
+    const date = parseDate(r.TradDt);
+    if (!date) continue;
+
+    rows.push({
+      tradingsymbol: r.TckrSymb,
+      exchange,
+      date,
+      open:   isNaN(open)   ? null : open,
+      high:   isNaN(high)   ? null : high,
+      low:    isNaN(low)    ? null : low,
+      close,
+      volume: isNaN(volume) ? null : volume
+    });
+  }
+  return rows;
 }
 
-function chunk(arr, size) {
-  const out = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
+function shouldInclude(row, exchange) {
+  const series = row.SctySrs;
+  if (exchange === "NSE") return series === "EQ";
+  // BSE uses group codes (A, B, T, etc.) — exclude suspended (Z), unlisted (XT/XD), debt (ID/IS/IQ)
+  if (exchange === "BSE") return !["Z", "XT", "XD", "XC", "IS", "IQ", "IV", "ID"].includes(series);
+  return false;
 }
 
-// Returns ISO string adjusted to IST (UTC+5:30) for correct date at midnight
-function toIST(date) {
-  return new Date(date.getTime() + 5.5 * 60 * 60 * 1000).toISOString();
+function parseDate(str) {
+  if (!str) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  // DD-MMM-YYYY e.g. 15-JAN-2024
+  const m = str.match(/^(\d{2})-([A-Z]{3})-(\d{4})$/i);
+  if (m) {
+    const mo = { JAN:"01",FEB:"02",MAR:"03",APR:"04",MAY:"05",JUN:"06",
+                 JUL:"07",AUG:"08",SEP:"09",OCT:"10",NOV:"11",DEC:"12" };
+    return `${m[3]}-${mo[m[2].toUpperCase()]}-${m[1]}`;
+  }
+  return null;
+}
+
+// ── Date helper ─────────────────────────────────────────────────────────────
+
+function getLastTradingDay() {
+  // Work in IST (UTC+5:30). Bhavcopy published after ~18:00 IST.
+  const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  if (ist.getUTCHours() < 18) ist.setUTCDate(ist.getUTCDate() - 1);
+  // Skip weekends
+  while (ist.getUTCDay() === 0 || ist.getUTCDay() === 6)
+    ist.setUTCDate(ist.getUTCDate() - 1);
+  return ist.toISOString().slice(0, 10).replace(/-/g, "");
 }
