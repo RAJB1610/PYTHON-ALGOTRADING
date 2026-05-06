@@ -791,24 +791,36 @@ function presetMatch(d, preset) {
   return true;
 }
 
+function verdictBucket(bull) {
+  if (bull >= 4) return "sb";
+  if (bull === 3) return "b";
+  if (bull === 2) return "n";
+  return "av";
+}
+
 function renderTech() {
   const rows = techStocks.map(s => ({ sym: s.tradingsymbol, sec: s.exchange, d: normalizeSig(s) }));
 
-  // Filter by preset then by verdict card
-  let filtered = rows.filter(r => presetMatch(r.d, techPreset));
-  if (techVerdictF) {
-    filtered = filtered.filter(r => {
-      const b = r.d.bullCount ?? 0;
-      if (techVerdictF === "sb") return b >= 4;
-      if (techVerdictF === "b")  return b === 3;
-      if (techVerdictF === "n")  return b === 2;
-      if (techVerdictF === "av") return b <= 1;
-      return true;
-    });
-  }
+  // Step 1: apply preset filter
+  const presetFiltered = rows.filter(r => presetMatch(r.d, techPreset));
 
-  // Sort
-  filtered.sort((a, b) => {
+  // Step 2: count per verdict bucket from the preset-filtered set (cards always show these)
+  let sb=0, b=0, n=0, av=0;
+  presetFiltered.forEach(r => {
+    const bull = r.d.bullCount ?? 0;
+    if (bull >= 4) sb++;
+    else if (bull === 3) b++;
+    else if (bull === 2) n++;
+    else av++;
+  });
+
+  // Step 3: apply verdict card filter on top (only affects the table rows)
+  const tableRows = techVerdictF
+    ? presetFiltered.filter(r => verdictBucket(r.d.bullCount ?? 0) === techVerdictF)
+    : presetFiltered;
+
+  // Step 4: sort the table rows
+  tableRows.sort((a, b) => {
     const ad = a.d, bd = b.d;
     const v = (x, key) => {
       if (!x || !x.ok) return -9999;
@@ -819,7 +831,6 @@ function renderTech() {
       if (key === "macd")  return x.macd?.hist;
       if (key === "vol")   return x.volRatio;
       if (key === "ma")    return x.maTrend === "uptrend" ? 2 : x.maTrend === "mixed" ? 1 : 0;
-      if (key === "pos52") return x.pos52;
       if (key === "bull")  return x.bullCount;
       return 0;
     };
@@ -827,29 +838,24 @@ function renderTech() {
     return (v(ad, techSortC) - v(bd, techSortC)) * techSortD;
   });
 
-  document.getElementById("techCt").textContent = `${filtered.length} of ${rows.length} stocks`;
+  document.getElementById("techCt").textContent =
+    techVerdictF ? `${tableRows.length} of ${presetFiltered.length} stocks` : `${presetFiltered.length} stocks`;
 
-  // Summary counts — always match what's visible in the table (filtered set)
-  let sb=0, b=0, n=0, av=0;
-  filtered.forEach(r => {
-    const bull = r.d.bullCount ?? 0;
-    if (bull >= 4) sb++;
-    else if (bull === 3) b++;
-    else if (bull === 2) n++;
-    else av++;
-  });
-  const vfAct = (k) => techVerdictF === k ? "border-color:var(--green);background:var(--green3)" : "cursor:pointer";
+  // Render summary cards (counts from presetFiltered, verdict filter only highlights active card)
+  const vfAct = (k) => techVerdictF === k
+    ? "border-color:var(--green);background:var(--green3);cursor:pointer"
+    : "cursor:pointer";
   document.getElementById("techSummary").innerHTML = `
-    <div class="sum-card" style="${vfAct("sb")}" onclick="setVerdictF('sb')"><div class="sum-n" style="color:var(--green)">${sb}</div><div class="sum-l">Strong Buy ▼</div></div>
-    <div class="sum-card" style="${vfAct("b")}"  onclick="setVerdictF('b')"><div class="sum-n" style="color:var(--blue)">${b}</div><div class="sum-l">Buy ▼</div></div>
-    <div class="sum-card" style="${vfAct("n")}"  onclick="setVerdictF('n')"><div class="sum-n">${n}</div><div class="sum-l">Neutral ▼</div></div>
-    <div class="sum-card" style="${vfAct("av")}" onclick="setVerdictF('av')"><div class="sum-n" style="color:var(--muted)">${av}</div><div class="sum-l">Avoid ▼</div></div>
+    <div class="sum-card" style="${vfAct("sb")}" onclick="setVerdictF('sb')"><div class="sum-n" style="color:var(--green)">${sb}</div><div class="sum-l">Strong Buy</div></div>
+    <div class="sum-card" style="${vfAct("b")}"  onclick="setVerdictF('b')"><div class="sum-n" style="color:var(--blue)">${b}</div><div class="sum-l">Buy</div></div>
+    <div class="sum-card" style="${vfAct("n")}"  onclick="setVerdictF('n')"><div class="sum-n">${n}</div><div class="sum-l">Neutral</div></div>
+    <div class="sum-card" style="${vfAct("av")}" onclick="setVerdictF('av')"><div class="sum-n" style="color:var(--muted)">${av}</div><div class="sum-l">Avoid</div></div>
     <div class="sum-card"><div class="sum-n">${rows.length}</div><div class="sum-l">Loaded</div></div>`;
 
   const tbody = document.getElementById("techBody");
   tbody.innerHTML = "";
 
-  filtered.forEach(row => {
+  tableRows.forEach(row => {
     const { sym, sec, d } = row;
     const loading = !d;
     const bull   = d?.bullCount ?? 0;
