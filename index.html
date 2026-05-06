@@ -24,6 +24,25 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--bg); color: var(--txt); font-family: var(--font); min-height: 100vh; }
 
+/* ── Index cards ─────────────────────────────────────────────────────────── */
+.idx-card {
+  border-radius: var(--r);
+  overflow: hidden;
+  border: 1px solid var(--bdr);
+  background: var(--bg2);
+  box-shadow: 0 2px 8px rgba(0,0,0,.05);
+  position: relative;
+}
+.idx-top   { padding: 14px 16px 0; }
+.idx-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; }
+.idx-price { font-size: 26px; font-weight: 800; font-family: var(--mono); letter-spacing: -1px; line-height: 1; }
+.idx-chg   { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 6px; }
+.idx-chg.up { background: var(--green3); color: var(--green); }
+.idx-chg.dn { background: var(--red3);   color: var(--red);   }
+.idx-chg.na { background: var(--bg3);    color: var(--muted); }
+.idx-meta  { font-size: 10px; color: var(--muted); font-family: var(--mono); margin: 4px 0 10px; display: flex; gap: 10px; flex-wrap: wrap; }
+.idx-chart { display: block; width: 100%; line-height: 0; }
+
 /* ── Header ─────────────────────────────────────────────────────────────── */
 header {
   background: var(--bg2); border-bottom: 1px solid var(--bdr);
@@ -233,13 +252,13 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
 </header>
 
 <!-- Live Index Charts -->
-<div style="background:var(--bg2);border-bottom:1px solid var(--bdr);padding:12px 16px">
+<div style="background:var(--bg2);border-bottom:1px solid var(--bdr);padding:14px 16px">
   <div style="max-width:1400px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:12px">
-    <div class="idx-card" id="idx_nifty"  style="background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--r);padding:12px 14px;min-height:120px">
-      <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em">Loading…</div>
+    <div class="idx-card" id="idx_nifty">
+      <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:14px 16px">Loading…</div>
     </div>
-    <div class="idx-card" id="idx_sensex" style="background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--r);padding:12px 14px;min-height:120px">
-      <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em">Loading…</div>
+    <div class="idx-card" id="idx_sensex">
+      <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:14px 16px">Loading…</div>
     </div>
   </div>
 </div>
@@ -3157,22 +3176,26 @@ setInterval(loadIndexCharts, 5 * 60 * 1000); // refresh every 5 min
 // ════════════════════════════════════════════════════════════════════════════
 // INDEX CHARTS — Nifty 50 + Sensex via Yahoo Finance
 // ════════════════════════════════════════════════════════════════════════════
-function sparklineSVG(closes, color) {
+function sparklineSVG(closes, color, isUp) {
   const vals = closes.filter(c => c != null);
   if (vals.length < 2) return "";
   const mn = Math.min(...vals), mx = Math.max(...vals), rng = mx - mn || 1;
-  const W = 400, H = 70;
+  const W = 600, H = 72, PAD = 2;
   const pts = vals.map((c, i) =>
-    `${(i / (vals.length - 1) * W).toFixed(1)},${(H - (c - mn) / rng * H).toFixed(1)}`
+    `${(i / (vals.length - 1) * W).toFixed(1)},${(PAD + (H - PAD*2) - (c - mn) / rng * (H - PAD*2)).toFixed(1)}`
   ).join(" ");
-  const fill = `${pts} ${W},${H} 0,${H}`;
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:70px;display:block;margin-top:8px">
-    <defs><linearGradient id="g${color.replace('#','')}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="${color}" stop-opacity="0.25"/>
-      <stop offset="100%" stop-color="${color}" stop-opacity="0.02"/>
-    </linearGradient></defs>
-    <polygon points="${fill}" fill="url(#g${color.replace('#','')})" />
-    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/>
+  const gradId = `sg_${color.replace('#','')}`;
+  const lineColor = isUp === false ? "#E24B4A" : isUp === true ? "#1D9E75" : color;
+  const fillColor = isUp === false ? "#E24B4A" : isUp === true ? "#1D9E75" : color;
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="idx-chart" style="height:72px">
+    <defs>
+      <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"   stop-color="${fillColor}" stop-opacity="0.18"/>
+        <stop offset="100%" stop-color="${fillColor}" stop-opacity="0.01"/>
+      </linearGradient>
+    </defs>
+    <polygon points="${pts} ${W},${H} 0,${H}" fill="url(#${gradId})"/>
+    <polyline points="${pts}" fill="none" stroke="${lineColor}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
   </svg>`;
 }
 
@@ -3180,27 +3203,34 @@ function renderIndexCard(id, name, exchange, d, color) {
   const el = document.getElementById(id);
   if (!el) return;
   if (!d || d.error) {
-    el.innerHTML = `<div style="font-size:11px;color:var(--muted)">${name} — data unavailable</div>`;
+    el.innerHTML = `<div class="idx-top"><div class="idx-label">${name} · ${exchange}</div><div style="font-size:12px;color:var(--muted);padding-bottom:14px">Data unavailable</div></div>`;
     return;
   }
-  const chg     = d.prevClose ? (d.price - d.prevClose) / d.prevClose * 100 : null;
-  const chgStr  = chg != null ? `${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%` : "—";
-  const chgClr  = chg == null ? "var(--muted)" : chg >= 0 ? "var(--green)" : "var(--red)";
-  const fmt     = n => n != null ? "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—";
-  const now     = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
-  el.innerHTML  = `
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-      <div>
-        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">${name} · ${exchange} · INR</div>
-        <div style="display:flex;align-items:baseline;gap:8px">
-          <span style="font-size:22px;font-weight:700;font-family:var(--mono);letter-spacing:-.5px">${fmt(d.price)}</span>
-          <span style="font-size:13px;font-weight:700;color:${chgClr}">${chgStr}</span>
-        </div>
-        <div style="font-size:10px;color:var(--muted);margin-top:2px;font-family:var(--mono)">H ${fmt(d.high)} &nbsp; L ${fmt(d.low)} &nbsp; <span style="color:var(--dim)">${now} IST</span></div>
+  const chg    = d.prevClose ? (d.price - d.prevClose) / d.prevClose * 100 : null;
+  const isUp   = chg == null ? null : chg >= 0;
+  const chgStr = chg != null ? `${chg >= 0 ? "▲" : "▼"} ${Math.abs(chg).toFixed(2)}%` : "—";
+  const chgCls = chg == null ? "na" : chg >= 0 ? "up" : "dn";
+  const fmt    = n => n != null ? "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—";
+  const pts    = d.prevClose ? `+${(d.price - d.prevClose).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` : "";
+  const now    = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
+  el.innerHTML = `
+    <div class="idx-top">
+      <div class="idx-label">
+        <span>${name} <span style="opacity:.55">· ${exchange} · INR</span></span>
+        <span style="font-size:9px;background:${isUp===null?"var(--bg4)":isUp?"var(--green3)":"var(--red3)"};color:${isUp===null?"var(--muted)":isUp?"var(--green)":"var(--red)"};padding:2px 7px;border-radius:6px;font-weight:700">● LIVE</span>
       </div>
-      <span style="font-size:9px;background:${chg==null?"var(--bg4)":chg>=0?"var(--green3)":"var(--red3)"};color:${chg==null?"var(--muted)":chg>=0?"var(--green)":"var(--red)"};padding:2px 7px;border-radius:8px;font-weight:700;white-space:nowrap">● LIVE</span>
+      <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:5px">
+        <span class="idx-price">${fmt(d.price)}</span>
+        <span class="idx-chg ${chgCls}">${chgStr}</span>
+        ${pts ? `<span style="font-size:11px;color:var(--muted);font-family:var(--mono)">(${pts})</span>` : ""}
+      </div>
+      <div class="idx-meta">
+        <span>H&nbsp;${fmt(d.high)}</span>
+        <span>L&nbsp;${fmt(d.low)}</span>
+        <span style="color:var(--dim)">${now} IST</span>
+      </div>
     </div>
-    ${sparklineSVG(d.closes, color)}`;
+    ${sparklineSVG(d.closes, color, isUp)}`;
 }
 
 async function loadIndexCharts() {
