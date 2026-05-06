@@ -799,7 +799,20 @@ function verdictBucket(bull) {
 }
 
 function renderTech() {
-  const rows = techStocks.map(s => ({ sym: s.tradingsymbol, sec: s.exchange, d: normalizeSig(s) }));
+  let rows = techStocks.map(s => ({ sym: s.tradingsymbol, sec: s.exchange, d: normalizeSig(s) }));
+
+  // When showing all exchanges, deduplicate by symbol — keep NSE if both exist, else highest bull_count
+  if (techExch === "ALL") {
+    const best = {};
+    rows.forEach(r => {
+      const prev = best[r.sym];
+      if (!prev) { best[r.sym] = r; return; }
+      const prevBull = prev.d.bullCount ?? 0, curBull = r.d.bullCount ?? 0;
+      if (curBull > prevBull) { best[r.sym] = r; return; }
+      if (curBull === prevBull && r.sec === "NSE") best[r.sym] = r;
+    });
+    rows = Object.values(best);
+  }
 
   // Step 1: apply preset filter
   const presetFiltered = rows.filter(r => presetMatch(r.d, techPreset));
