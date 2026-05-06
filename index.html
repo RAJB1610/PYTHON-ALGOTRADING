@@ -31,7 +31,8 @@ body { background: var(--bg); color: var(--txt); font-family: var(--font); min-h
 .idx-name       { font-size:11px; font-weight:700; letter-spacing:-.2px; }
 .idx-exch       { font-size:9px; color:var(--muted); font-weight:600; margin-left:5px; }
 .idx-live-dot   { font-size:8px; font-weight:700; padding:1px 6px; border-radius:6px; display:flex; align-items:center; gap:4px; }
-.idx-live-dot::before { content:""; width:5px; height:5px; border-radius:50%; background:currentColor; animation:livePing 1.5s ease-in-out infinite; }
+.idx-live-dot::before { content:""; width:5px; height:5px; border-radius:50%; background:currentColor; }
+.idx-live-dot[data-live="1"]::before { animation:livePing 1.5s ease-in-out infinite; }
 .idx-price-row  { padding:1px 12px 0; display:flex; align-items:baseline; gap:6px; flex-wrap:wrap; }
 .idx-price      { font-size:18px; font-weight:800; font-family:var(--mono); letter-spacing:-.8px; line-height:1.1; border-radius:4px; padding:0 2px; transition:background .15s; }
 .idx-price.flash-up { animation:flashUp .7s ease forwards; }
@@ -3777,6 +3778,27 @@ function _seriesData(id, range) {
     .filter(p => p.value != null);
 }
 
+function isMarketOpen() {
+  const now = new Date(Date.now() + 5.5 * 3600 * 1000); // shift to IST
+  const day = now.getUTCDay(); // 0=Sun, 6=Sat
+  if (day === 0 || day === 6) return false;
+  const h = now.getUTCHours(), m = now.getUTCMinutes();
+  const mins = h * 60 + m;
+  return mins >= 9 * 60 + 15 && mins < 15 * 60 + 30; // 9:15–15:30 IST
+}
+
+function _marketBadge(isSx, isUp) {
+  const open = isMarketOpen();
+  if (open) {
+    const upBg  = isSx ? "var(--blue3)"  : "var(--green3)";
+    const upClr = isSx ? "var(--blue)"   : "var(--green)";
+    const bg  = isUp == null ? "var(--bg3)"   : isUp ? upBg  : "var(--red3)";
+    const clr = isUp == null ? "var(--muted)" : isUp ? upClr : "var(--red)";
+    return { label: "LIVE", bg, clr, pulse: true };
+  }
+  return { label: "CLOSED", bg: "var(--bg3)", clr: "var(--muted)", pulse: false };
+}
+
 function _statsHTML(d) {
   const chg    = d.prevClose ? (d.price - d.prevClose) / d.prevClose * 100 : null;
   const isUp   = chg == null ? null : chg >= 0;
@@ -3834,18 +3856,16 @@ function renderIndexCard(id, name, exchange, d) {
   _lcLastRefresh[id] = Date.now();
 
   const { isUp, clr, pct, pts, now } = _statsHTML(d);
-  const isSx    = id === "idx_sensex";
-  const upBg    = isSx ? "var(--blue3)"  : "var(--green3)";
-  const upClrH  = isSx ? "var(--blue)"   : "var(--green)";
-  const liveBg  = isUp == null ? "var(--bg3)"  : isUp ? upBg  : "var(--red3)";
-  const liveClr = isUp == null ? "var(--muted)" : isUp ? upClrH : "var(--red)";
+  const isSx     = id === "idx_sensex";
+  const upClrH   = isSx ? "var(--blue)" : "var(--green)";
   const priceClr = isUp == null ? "var(--txt)" : isUp ? upClrH : "var(--red)";
-  const curR    = _lcRange[id];
+  const badge    = _marketBadge(isSx, isUp);
+  const curR     = _lcRange[id];
 
   el.innerHTML = `
     <div class="idx-header">
       <div><span class="idx-name">${name}</span><span class="idx-exch">${exchange} · INR</span></div>
-      <span class="idx-live-dot" style="background:${liveBg};color:${liveClr}">LIVE</span>
+      <span class="idx-live-dot" data-live="${badge.pulse?1:0}" style="background:${badge.bg};color:${badge.clr}">${badge.label}</span>
     </div>
     <div class="idx-price-row" id="${id}_stats">
       <span class="idx-price" id="${id}_price" style="color:${priceClr}">${_fmtINR(d.price)}</span>
@@ -4071,9 +4091,11 @@ function _updateStats(id, d) {
 
   const dot = document.querySelector(`#${id} .idx-live-dot`);
   if (dot) {
-    const upBg = isSx ? "var(--blue3)" : "var(--green3)";
-    dot.style.background = isUp == null ? "var(--bg3)"   : isUp ? upBg    : "var(--red3)";
-    dot.style.color      = isUp == null ? "var(--muted)" : isUp ? upClrH  : "var(--red)";
+    const badge = _marketBadge(isSx, isUp);
+    dot.textContent      = badge.label;
+    dot.dataset.live     = badge.pulse ? "1" : "0";
+    dot.style.background = badge.bg;
+    dot.style.color      = badge.clr;
   }
 
   if (_lcCharts[id]) {
