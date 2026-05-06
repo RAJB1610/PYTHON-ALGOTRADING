@@ -1341,6 +1341,8 @@ function renderWatchlist() {
     const trend = sig?.ma_trend  ?? null;
     const v     = bull != null ? techVerdict(bull, true) : null;
     const tr    = document.createElement("tr");
+    tr.style.cursor = "pointer";
+    tr.onclick = () => openStockPanel(w.sym, w.exchange, sig || null);
     tr.innerHTML = `
       <td><div class="sym-name">${w.sym}</div><div class="sym-sec">${w.exchange} · Added ${w.addedAt}</div></td>
       <td>${price != null ? `<div class="cmp-val">₹${fmtCmp(price)}</div>` : `<span style="color:var(--dim)">—</span>`}</td>
@@ -1349,8 +1351,8 @@ function renderWatchlist() {
       <td>${trend ? `<span style="font-size:11px;font-weight:600;color:${trend==="uptrend"?"var(--green)":trend==="downtrend"?"var(--red)":"var(--amber)"}">${trend}</span>` : `<span style="color:var(--dim)">—</span>`}</td>
       <td>${v ? `<span class="badge ${v.cls}">${v.label}</span>` : `<span style="font-size:10px;color:var(--dim)">Run scan first</span>`}</td>
       <td style="text-align:center;white-space:nowrap">
-        <button class="btn btn-green" style="font-size:10px;padding:3px 10px" onclick="watchToHolding('${w.sym}','${w.exchange}')">+ Holdings</button>
-        <button class="btn" style="font-size:10px;padding:3px 8px;color:var(--red);margin-left:4px" onclick="removeFromWatch('${w.sym}','${w.exchange}')">✕</button>
+        <button class="btn btn-green" style="font-size:10px;padding:3px 10px" onclick="event.stopPropagation();watchToHolding('${w.sym}','${w.exchange}')">+ Holdings</button>
+        <button class="btn" style="font-size:10px;padding:3px 8px;color:var(--red);margin-left:4px" onclick="event.stopPropagation();removeFromWatch('${w.sym}','${w.exchange}')">✕</button>
       </td>`;
     tbody.appendChild(tr);
   });
