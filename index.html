@@ -235,23 +235,17 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
 <!-- Live Index Charts -->
 <div style="background:var(--bg2);border-bottom:1px solid var(--bdr);padding:10px 16px">
   <div style="max-width:1400px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:10px">
-    <div>
-      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">Nifty 50</div>
-      <div class="tradingview-widget-container" style="height:130px">
-        <div class="tradingview-widget-container__widget" style="height:130px"></div>
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>
-        {"symbol":"NSE:NIFTY","width":"100%","height":130,"locale":"en","dateRange":"1D","colorTheme":"light","trendLineColor":"rgba(15,110,86,1)","underLineColor":"rgba(15,110,86,0.15)","underLineBottomColor":"rgba(15,110,86,0)","isTransparent":true,"autosize":false,"largeChartUrl":""}
-        </script>
-      </div>
+    <div class="tradingview-widget-container" style="height:220px;overflow:hidden">
+      <div class="tradingview-widget-container__widget"></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>
+      {"symbol":"NSE:NIFTY","width":"100%","height":220,"locale":"en","dateRange":"1D","colorTheme":"light","trendLineColor":"rgba(15,110,86,1)","underLineColor":"rgba(15,110,86,0.15)","underLineBottomColor":"rgba(15,110,86,0)","isTransparent":false,"autosize":true,"largeChartUrl":""}
+      </script>
     </div>
-    <div>
-      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">Sensex</div>
-      <div class="tradingview-widget-container" style="height:130px">
-        <div class="tradingview-widget-container__widget" style="height:130px"></div>
-        <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>
-        {"symbol":"BSE:SENSEX","width":"100%","height":130,"locale":"en","dateRange":"1D","colorTheme":"light","trendLineColor":"rgba(24,95,165,1)","underLineColor":"rgba(24,95,165,0.15)","underLineBottomColor":"rgba(24,95,165,0)","isTransparent":true,"autosize":false,"largeChartUrl":""}
-        </script>
-      </div>
+    <div class="tradingview-widget-container" style="height:220px;overflow:hidden">
+      <div class="tradingview-widget-container__widget"></div>
+      <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>
+      {"symbol":"BSE:SENSEX","width":"100%","height":220,"locale":"en","dateRange":"1D","colorTheme":"light","trendLineColor":"rgba(24,95,165,1)","underLineColor":"rgba(24,95,165,0.15)","underLineBottomColor":"rgba(24,95,165,0)","isTransparent":false,"autosize":true,"largeChartUrl":""}
+      </script>
     </div>
   </div>
 </div>
