@@ -45,32 +45,24 @@ exports.handler = async (event) => {
     if (data.status === "success" && data.data?.access_token) {
       // Persist token so background sync jobs can use it without browser involvement
       const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
-      let sbDebug = null;
       if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
-        try {
-          const sbRes = await fetch(`${SUPABASE_URL}/rest/v1/settings`, {
-            method: "POST",
-            headers: {
-              apikey:         SUPABASE_SERVICE_KEY,
-              Authorization:  `Bearer ${SUPABASE_SERVICE_KEY}`,
-              "Content-Type": "application/json",
-              Prefer:         "resolution=merge-duplicates,return=minimal"
-            },
-            body: JSON.stringify({
-              key:        "kite_access_token",
-              value:      data.data.access_token,
-              updated_at: new Date().toISOString()
-            })
-          });
-          sbDebug = sbRes.ok ? "saved" : `HTTP ${sbRes.status}: ${await sbRes.text()}`;
-        } catch (e) {
-          sbDebug = `fetch error: ${e.message}`;
-        }
-      } else {
-        sbDebug = "env vars missing";
+        await fetch(`${SUPABASE_URL}/rest/v1/settings`, {
+          method: "POST",
+          headers: {
+            apikey:         SUPABASE_SERVICE_KEY,
+            Authorization:  `Bearer ${SUPABASE_SERVICE_KEY}`,
+            "Content-Type": "application/json",
+            Prefer:         "resolution=merge-duplicates,return=minimal"
+          },
+          body: JSON.stringify({
+            key:        "kite_access_token",
+            value:      data.data.access_token,
+            updated_at: new Date().toISOString()
+          })
+        }).catch(() => {}); // don't fail auth if Supabase write fails
       }
       return { statusCode: 200, headers: CORS, body: JSON.stringify({
-        ok: true, access_token: data.data.access_token, user: data.data.user_name, sbDebug
+        ok: true, access_token: data.data.access_token, user: data.data.user_name
       })};
     }
     return { statusCode: 200, headers: CORS, body: JSON.stringify({
