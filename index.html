@@ -52,6 +52,16 @@ body { background: var(--bg); color: var(--txt); font-family: var(--font); min-h
 @keyframes toastIn  { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
 @keyframes spin     { to{transform:rotate(360deg)} }
 
+/* ── Notes tooltip ───────────────────────────────────────────────────────── */
+.note-wrap { position:relative; display:inline-flex; align-items:center; }
+.note-icon  { font-size:12px; cursor:default; opacity:.7; margin-left:4px; }
+.note-tip   { position:absolute; left:0; top:calc(100% + 4px); z-index:300;
+              background:var(--txt); color:#fff; font-size:11px; font-family:var(--font);
+              line-height:1.45; padding:7px 10px; border-radius:6px; white-space:pre-wrap;
+              width:260px; max-height:220px; overflow-y:auto; box-shadow:0 4px 16px rgba(0,0,0,.22);
+              opacity:0; pointer-events:none; transition:opacity .15s; }
+.note-wrap:hover .note-tip { opacity:1; pointer-events:auto; }
+
 /* ── Watchlist ───────────────────────────────────────────────────────────── */
 .wbtn { background:none;border:none;cursor:pointer;font-size:18px;padding:2px 4px;line-height:1;transition:color .12s,transform .12s; }
 .wbtn:hover { transform:scale(1.25); }
@@ -543,6 +553,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
             <th>MA Trend</th>
             <th>Recommendation</th>
             <th>Date</th>
+            <th>Notes</th>
             <th style="text-align:center">⋮</th>
           </tr></thead>
           <tbody id="portBody"></tbody>
@@ -1479,6 +1490,7 @@ const COL = {
              "Last Traded Price","Closing Price","NSE Price","BSE Price","Rate"],
   transDate:["Transaction Date","Date","Trade Date","Purchase Date","Buy Date",
              "transaction date","date","Order Date","Execution Date"],
+  notes:    ["Notes","notes","Note","Comment","Comments","Remarks","Description","Memo","Thesis","Analysis"],
 };
 
 function findCol(headers, aliases) {
@@ -1576,12 +1588,12 @@ function parseCSV(text) {
   if (lines.length < 2) return [];
   const delim = lines[0].split("\t").length > 2 ? "\t" : ",";
   const headers = splitRow(lines[0], delim);
-  const idx = { sym: findCol(headers,COL.sym), qty: findCol(headers,COL.qty), avg: findCol(headers,COL.avgPrice), cmp: findCol(headers,COL.cmp), dt: findCol(headers,COL.transDate) };
+  const idx = { sym: findCol(headers,COL.sym), qty: findCol(headers,COL.qty), avg: findCol(headers,COL.avgPrice), cmp: findCol(headers,COL.cmp), dt: findCol(headers,COL.transDate), notes: findCol(headers,COL.notes) };
   // If headers not found in row 0, scan first 5 rows (some exports have metadata on top)
   if (idx.sym < 0 || idx.qty < 0 || idx.avg < 0) {
     for (let r = 1; r < Math.min(6, lines.length); r++) {
       const h2 = splitRow(lines[r], delim);
-      const t2 = { sym: findCol(h2,COL.sym), qty: findCol(h2,COL.qty), avg: findCol(h2,COL.avgPrice), cmp: findCol(h2,COL.cmp), dt: findCol(h2,COL.transDate) };
+      const t2 = { sym: findCol(h2,COL.sym), qty: findCol(h2,COL.qty), avg: findCol(h2,COL.avgPrice), cmp: findCol(h2,COL.cmp), dt: findCol(h2,COL.transDate), notes: findCol(h2,COL.notes) };
       if (t2.sym>=0 && t2.qty>=0 && t2.avg>=0) {
         return parseCSVWithHeader(lines.slice(r), delim, t2);
       }
@@ -1605,7 +1617,9 @@ function parseCSVWithHeader(lines, delim, idx) {
     if (!sym || !(qty>0) || !(avg>0)) return null;
     const rawDt = idx.dt >= 0 ? c[idx.dt]?.trim() : null;
     const transDate = rawDt ? (rawDt.match(/\d{4}-\d{2}-\d{2}/)?.[0] || rawDt.slice(0,10)) : null;
-    return { sym, qty, avgPrice:+avg.toFixed(2), cmp:cmp&&!isNaN(cmp)?+cmp.toFixed(2):null, yf: yf || sym+".NS", transDate };
+    const rawNotes = idx.notes >= 0 ? c[idx.notes]?.trim() : null;
+    const notes = rawNotes ? rawNotes.replace(/\\n/g, "\n").replace(/\r\n/g, "\n") || null : null;
+    return { sym, qty, avgPrice:+avg.toFixed(2), cmp:cmp&&!isNaN(cmp)?+cmp.toFixed(2):null, yf: yf || sym+".NS", transDate, notes: notes || null };
   }).filter(Boolean);
 
   // Deduplicate: aggregate multiple Buy rows for same symbol (weighted avg price)
@@ -1616,6 +1630,7 @@ function parseCSVWithHeader(lines, delim, idx) {
       const totalQty = e.qty + r.qty;
       e.avgPrice = +((e.qty * e.avgPrice + r.qty * r.avgPrice) / totalQty).toFixed(2);
       e.qty = totalQty;
+      if (!e.notes && r.notes) e.notes = r.notes;
     } else {
       map[r.sym] = { ...r };
     }
@@ -1718,9 +1733,15 @@ function renderPortfolio() {
     const rec      = getRecommendation(h, live);
     const cmpCell  = cmp ? `₹${fmtCmp(cmp)}` : live ? `<span style="color:var(--dim)">—</span>` : `<span style="color:var(--muted)">Loading…</span>`;
 
+    const secLabel = UNIVERSE.find(u=>u.sym===h.sym)?.sec || "";
+    const yfHint   = live?._failed ? `<span style="font-size:9px;color:var(--red2);font-family:var(--mono)">${h.yf||h.sym+".NS"} not found</span>` : secLabel ? `<div class="sym-sec">${secLabel}</div>` : "";
+    const notesCell = h.notes
+      ? `<div class="note-wrap"><span class="note-icon" title="">📝</span><div class="note-tip">${h.notes.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div></div>`
+      : `<span style="color:var(--dim);font-size:11px">—</span>`;
+
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><div class="sym-name">${h.sym}</div><div class="sym-sec">${UNIVERSE.find(u=>u.sym===h.sym)?.sec||""}</div></td>
+      <td><div class="sym-name">${h.sym}</div>${yfHint}</td>
       <td style="font-family:var(--mono)">${h.qty.toLocaleString("en-IN")}</td>
       <td style="font-family:var(--mono)">₹${h.avgPrice.toLocaleString("en-IN")}</td>
       <td style="font-family:var(--mono);font-weight:700">${cmpCell}</td>
@@ -1733,6 +1754,7 @@ function renderPortfolio() {
       <td><span class="${live&&!live._failed?`sig ${live.maTrend==="uptrend"?"bull":live.maTrend==="downtrend"?"bear":"warn"}`:"sig neut"}" style="font-size:10px"><div class="sig-lbl">${live&&!live._failed?live.maTrend?.toUpperCase()||"—":"—"}</div></span></td>
       <td><span class="badge ${rec.cls}" title="${rec.reason}">${rec.label}</span></td>
       <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${h.transDate||"—"}</td>
+      <td>${notesCell}</td>
       <td style="text-align:center"><button class="btn" style="font-size:10px;padding:2px 8px;color:var(--red)" onclick="removeHolding('${h.sym}')">✕</button></td>`;
     tbody.appendChild(tr);
   });
