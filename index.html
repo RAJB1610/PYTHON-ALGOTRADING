@@ -3888,6 +3888,14 @@ function _initChart(id) {
       fontSize:   11,
       fontFamily: "'JetBrains Mono', monospace",
     },
+    watermark: {
+      visible:    true,
+      fontSize:   13,
+      horzAlign:  "left",
+      vertAlign:  "bottom",
+      color:      wmClr,
+      text:       idxLabel,
+    },
     grid: {
       vertLines: { color: "#EBEEf6" },
       horzLines: { color: "#EBEEf6" },
@@ -3911,20 +3919,25 @@ function _initChart(id) {
     handleScale:  true,
   });
 
-  // Nifty = green, Sensex = blue — visually distinguishable even when shapes correlate
-  const isSensex = id === "idx_sensex";
-  const upClr    = isSensex ? "#185FA5" : "#1D9E75";
-  const upFill1  = isSensex ? "rgba(24,95,165,0.22)"  : "rgba(29,158,117,0.22)";
-  const upFill2  = isSensex ? "rgba(24,95,165,0.02)"  : "rgba(29,158,117,0.02)";
+  // Nifty = green/red, Sensex = blue/orange — different in BOTH up and down moves
+  const isSensex  = id === "idx_sensex";
+  const idxLabel  = isSensex ? "SENSEX · BSE" : "NIFTY 50 · NSE";
+  const upClr     = isSensex ? "#185FA5"              : "#1D9E75";
+  const upFill1   = isSensex ? "rgba(24,95,165,0.22)" : "rgba(29,158,117,0.22)";
+  const upFill2   = isSensex ? "rgba(24,95,165,0.02)" : "rgba(29,158,117,0.02)";
+  const dnClr     = isSensex ? "#D97706"              : "#E24B4A";
+  const dnFill1   = isSensex ? "rgba(217,119,6,0.02)" : "rgba(226,75,74,0.02)";
+  const dnFill2   = isSensex ? "rgba(217,119,6,0.22)" : "rgba(226,75,74,0.22)";
+  const wmClr     = isSensex ? "rgba(24,95,165,0.07)" : "rgba(29,158,117,0.07)";
 
   const series = chart.addBaselineSeries({
     baseValue:       { type: "price", price: base },
     topLineColor:    upClr,
     topFillColor1:   upFill1,
     topFillColor2:   upFill2,
-    bottomLineColor: "#E24B4A",
-    bottomFillColor1:"rgba(226,75,74,0.02)",
-    bottomFillColor2:"rgba(226,75,74,0.22)",
+    bottomLineColor: dnClr,
+    bottomFillColor1: dnFill1,
+    bottomFillColor2: dnFill2,
     lineWidth: 2,
     priceFormat: { type: "price", precision: 2, minMove: 0.01 },
   });
@@ -3933,7 +3946,7 @@ function _initChart(id) {
 
   const priceLine = series.createPriceLine({
     price:             last,
-    color:             last >= base ? upClr : "#E24B4A",
+    color:             last >= base ? upClr : dnClr,
     lineWidth:         1,
     lineStyle:         LightweightCharts.LineStyle.Dashed,
     axisLabelVisible:  true,
