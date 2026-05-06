@@ -827,6 +827,12 @@ function renderTech() {
     else av++;
   });
 
+  // Debug: log strong-buy stocks so we can verify what's being counted
+  console.log("[screener] preset=%s verdictF=%s deduped=%d presetFiltered=%d sb=%d",
+    techPreset, techVerdictF, rows.length, presetFiltered.length, sb);
+  console.log("[screener] Strong Buy stocks:",
+    presetFiltered.filter(r => (r.d.bullCount ?? 0) >= 4).map(r => `${r.sym}(${r.sec}) bull=${r.d.bullCount}`));
+
   // Step 3: apply verdict card filter on top (only affects the table rows)
   const tableRows = techVerdictF
     ? presetFiltered.filter(r => verdictBucket(r.d.bullCount ?? 0) === techVerdictF)
@@ -844,7 +850,7 @@ function renderTech() {
       if (key === "macd")  return x.macd?.hist;
       if (key === "vol")   return x.volRatio;
       if (key === "ma")    return x.maTrend === "uptrend" ? 2 : x.maTrend === "mixed" ? 1 : 0;
-      if (key === "bull")  return x.bullCount;
+      if (key === "bull")  return x.bullCount ?? -9999;
       return 0;
     };
     if (techSortC === "sym") return a.sym.localeCompare(b.sym) * techSortD;
