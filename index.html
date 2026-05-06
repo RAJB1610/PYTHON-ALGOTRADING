@@ -647,11 +647,12 @@ const FUND_STOCKS = [
 // ════════════════════════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════════════════════════
-const liveData   = {};         // keyed by sym (used by portfolio/fundamentals)
-let   techStocks = [];         // from screen-stocks API
-let   techExch   = "ALL";
-let   techPreset = "all";
-let   fundFilter = "all";
+const liveData       = {};         // keyed by sym (used by portfolio/fundamentals)
+let   techStocks     = [];         // from screen-stocks API
+let   techExch       = "ALL";
+let   techPreset     = "all";
+let   techVerdictF   = null;       // null | "sb" | "b" | "n" | "av"
+let   fundFilter     = "all";
 let   techSortC  = "bull";
 let   techSortD  = -1;
 let   activeTab  = "tech";
@@ -793,8 +794,18 @@ function presetMatch(d, preset) {
 function renderTech() {
   const rows = techStocks.map(s => ({ sym: s.tradingsymbol, sec: s.exchange, d: normalizeSig(s) }));
 
-  // Filter
-  const filtered = rows.filter(r => presetMatch(r.d, techPreset));
+  // Filter by preset then by verdict card
+  let filtered = rows.filter(r => presetMatch(r.d, techPreset));
+  if (techVerdictF) {
+    filtered = filtered.filter(r => {
+      const b = r.d.bullCount ?? 0;
+      if (techVerdictF === "sb") return b >= 4;
+      if (techVerdictF === "b")  return b === 3;
+      if (techVerdictF === "n")  return b === 2;
+      if (techVerdictF === "av") return b <= 1;
+      return true;
+    });
+  }
 
   // Sort
   filtered.sort((a, b) => {
@@ -827,11 +838,12 @@ function renderTech() {
     else if (bull === 2) n++;
     else av++;
   });
+  const vfAct = (k) => techVerdictF === k ? "border-color:var(--green);background:var(--green3)" : "cursor:pointer";
   document.getElementById("techSummary").innerHTML = `
-    <div class="sum-card"><div class="sum-n" style="color:var(--green)">${sb}</div><div class="sum-l">Strong Buy</div></div>
-    <div class="sum-card"><div class="sum-n" style="color:var(--blue)">${b}</div><div class="sum-l">Buy</div></div>
-    <div class="sum-card"><div class="sum-n">${n}</div><div class="sum-l">Neutral</div></div>
-    <div class="sum-card"><div class="sum-n" style="color:var(--muted)">${av}</div><div class="sum-l">Avoid</div></div>
+    <div class="sum-card" style="${vfAct("sb")}" onclick="setVerdictF('sb')"><div class="sum-n" style="color:var(--green)">${sb}</div><div class="sum-l">Strong Buy ▼</div></div>
+    <div class="sum-card" style="${vfAct("b")}"  onclick="setVerdictF('b')"><div class="sum-n" style="color:var(--blue)">${b}</div><div class="sum-l">Buy ▼</div></div>
+    <div class="sum-card" style="${vfAct("n")}"  onclick="setVerdictF('n')"><div class="sum-n">${n}</div><div class="sum-l">Neutral ▼</div></div>
+    <div class="sum-card" style="${vfAct("av")}" onclick="setVerdictF('av')"><div class="sum-n" style="color:var(--muted)">${av}</div><div class="sum-l">Avoid ▼</div></div>
     <div class="sum-card"><div class="sum-n">${rows.length}</div><div class="sum-l">Loaded</div></div>`;
 
   const tbody = document.getElementById("techBody");
@@ -2297,7 +2309,7 @@ function switchTab(tab, btn) {
 }
 
 function setExch(exch, btn) {
-  techExch = exch;
+  techExch = exch; techVerdictF = null;
   ["ALL","NSE","BSE"].forEach(e => {
     const el = document.getElementById("exch" + e);
     if (el) { el.style.background = ""; el.style.color = ""; el.style.borderColor = ""; }
@@ -2307,9 +2319,14 @@ function setExch(exch, btn) {
 }
 
 function setPreset(btn) {
-  techPreset = btn.dataset.filter;
+  techPreset = btn.dataset.filter; techVerdictF = null;
   document.querySelectorAll(".preset-bar .preset").forEach(b => b.classList.remove("active"));
   btn.classList.add("active");
+  renderTech();
+}
+
+function setVerdictF(key) {
+  techVerdictF = techVerdictF === key ? null : key;
   renderTech();
 }
 
