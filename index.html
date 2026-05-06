@@ -235,40 +235,14 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
 <!-- Live Index Charts -->
 <div style="background:var(--bg2);border-bottom:1px solid var(--bdr);padding:12px 16px">
   <div style="max-width:1400px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:12px">
-    <div>
-      <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px">
-        <span style="font-size:12px;font-weight:700">Nifty 50</span>
-        <span style="font-size:10px;color:var(--muted);font-family:var(--mono)">NSE · ₹ INR · Daily</span>
-        <span style="font-size:9px;background:var(--green3);color:var(--green);padding:1px 6px;border-radius:8px;font-weight:700;margin-left:auto">LIVE</span>
-      </div>
-      <div id="tv_nifty" style="height:260px"></div>
+    <div class="idx-card" id="idx_nifty"  style="background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--r);padding:12px 14px;min-height:120px">
+      <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em">Loading…</div>
     </div>
-    <div>
-      <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:4px">
-        <span style="font-size:12px;font-weight:700">Sensex</span>
-        <span style="font-size:10px;color:var(--muted);font-family:var(--mono)">BSE · ₹ INR · Daily</span>
-        <span style="font-size:9px;background:var(--green3);color:var(--green);padding:1px 6px;border-radius:8px;font-weight:700;margin-left:auto">LIVE</span>
-      </div>
-      <div id="tv_sensex" style="height:260px"></div>
+    <div class="idx-card" id="idx_sensex" style="background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--r);padding:12px 14px;min-height:120px">
+      <div style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em">Loading…</div>
     </div>
   </div>
 </div>
-<script src="https://s3.tradingview.com/tv.js" async onload="initCharts()"></script>
-<script>
-function initCharts() {
-  const base = {
-    width: "100%", height: 260,
-    interval: "D", timezone: "Asia/Kolkata",
-    theme: "light", style: "2",
-    locale: "en", hide_top_toolbar: false,
-    hide_legend: false, hide_side_toolbar: true,
-    allow_symbol_change: false, save_image: false,
-    enable_publishing: false, range: "3M"
-  };
-  new TradingView.widget({ ...base, symbol: "NSE:NIFTY",   container_id: "tv_nifty"  });
-  new TradingView.widget({ ...base, symbol: "BSE:SENSEX",  container_id: "tv_sensex" });
-}
-</script>
 
 <!-- Scan progress bar -->
 <div class="progress-wrap" id="progressWrap">
@@ -3177,6 +3151,67 @@ if (portfolio.length) renderPortfolio();
 checkKiteReturn();
 startScan();
 scheduleAuto();
+loadIndexCharts();
+setInterval(loadIndexCharts, 5 * 60 * 1000); // refresh every 5 min
+
+// ════════════════════════════════════════════════════════════════════════════
+// INDEX CHARTS — Nifty 50 + Sensex via Yahoo Finance
+// ════════════════════════════════════════════════════════════════════════════
+function sparklineSVG(closes, color) {
+  const vals = closes.filter(c => c != null);
+  if (vals.length < 2) return "";
+  const mn = Math.min(...vals), mx = Math.max(...vals), rng = mx - mn || 1;
+  const W = 400, H = 70;
+  const pts = vals.map((c, i) =>
+    `${(i / (vals.length - 1) * W).toFixed(1)},${(H - (c - mn) / rng * H).toFixed(1)}`
+  ).join(" ");
+  const fill = `${pts} ${W},${H} 0,${H}`;
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:70px;display:block;margin-top:8px">
+    <defs><linearGradient id="g${color.replace('#','')}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${color}" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="${color}" stop-opacity="0.02"/>
+    </linearGradient></defs>
+    <polygon points="${fill}" fill="url(#g${color.replace('#','')})" />
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+function renderIndexCard(id, name, exchange, d, color) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (!d || d.error) {
+    el.innerHTML = `<div style="font-size:11px;color:var(--muted)">${name} — data unavailable</div>`;
+    return;
+  }
+  const chg     = d.prevClose ? (d.price - d.prevClose) / d.prevClose * 100 : null;
+  const chgStr  = chg != null ? `${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%` : "—";
+  const chgClr  = chg == null ? "var(--muted)" : chg >= 0 ? "var(--green)" : "var(--red)";
+  const fmt     = n => n != null ? "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—";
+  const now     = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
+  el.innerHTML  = `
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">${name} · ${exchange} · INR</div>
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <span style="font-size:22px;font-weight:700;font-family:var(--mono);letter-spacing:-.5px">${fmt(d.price)}</span>
+          <span style="font-size:13px;font-weight:700;color:${chgClr}">${chgStr}</span>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:2px;font-family:var(--mono)">H ${fmt(d.high)} &nbsp; L ${fmt(d.low)} &nbsp; <span style="color:var(--dim)">${now} IST</span></div>
+      </div>
+      <span style="font-size:9px;background:${chg==null?"var(--bg4)":chg>=0?"var(--green3)":"var(--red3)"};color:${chg==null?"var(--muted)":chg>=0?"var(--green)":"var(--red)"};padding:2px 7px;border-radius:8px;font-weight:700;white-space:nowrap">● LIVE</span>
+    </div>
+    ${sparklineSVG(d.closes, color)}`;
+}
+
+async function loadIndexCharts() {
+  try {
+    const res  = await fetch("/.netlify/functions/index-data");
+    const data = await res.json();
+    if (!data.ok) return;
+    renderIndexCard("idx_nifty",  "Nifty 50", "NSE", data.nifty,  "#0F6E56");
+    renderIndexCard("idx_sensex", "Sensex",   "BSE", data.sensex, "#185FA5");
+  } catch(e) { console.warn("index-data:", e.message); }
+}
 </script>
 </body>
 </html>
