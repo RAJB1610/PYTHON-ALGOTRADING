@@ -4,7 +4,7 @@
 // Optional param: ?date=YYYY-MM-DD (defaults to latest date in daily_candles)
 
 const SB_BATCH = 500;
-const PAGE     = 50000; // rows per Supabase fetch
+const PAGE     = 50000; // rows per Supabase fetch (set Supabase max-rows to 50000 in API settings)
 const LOOKBACK = 365;   // calendar days of history
 
 exports.handler = async (event) => {
@@ -100,8 +100,8 @@ async function fetchAllCandles(url, key, exchange, cutoff) {
     const data = await res.json();
     if (!Array.isArray(data) || !data.length) break;
     all.push(...data);
+    offset += data.length;
     if (data.length < PAGE) break;
-    offset += PAGE;
   }
   return all;
 }
