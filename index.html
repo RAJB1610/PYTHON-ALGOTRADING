@@ -3669,25 +3669,26 @@ function _spSignalsHTML(d) {
 // ════════════════════════════════════════════════════════════════════════════
 // INDEX CHARTS — Google Finance style via Lightweight Charts + Yahoo Finance
 // ════════════════════════════════════════════════════════════════════════════
+const IDX_RANGES = [
+  { label:"1D", range:"1d"  }, { label:"1W", range:"5d"  }, { label:"1M", range:"1mo" },
+  { label:"3M", range:"3mo" }, { label:"6M", range:"6mo" }, { label:"1Y", range:"1y"  },
+  { label:"Max",range:"max" },
+];
 const _lcCharts      = {};   // { id: { chart, series, priceLine } }
-const _lcData        = {};   // { id: { dates[], closes[], price, prevClose, high, low } }
-const _lcRange       = {};   // { id: '1M' | '3M' }
+const _lcData        = {};   // { id: { price, prevClose, high, low, _displayPrice, series:{ range:{times,closes,intraday} } } }
+const _lcRange       = {};   // { id: range string e.g. "3mo" }
 const _lcLastRefresh = {};   // { id: timestamp }
 
 function _fmtINR(n) {
   return n != null ? "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—";
 }
 
-function _rangeData(id, months) {
-  const d = _lcData[id];
-  if (!d) return [];
-  const cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - months);
-  const cutStr = cutoff.toISOString().slice(0, 10);
-  return d.dates
-    .map((dt, i) => ({ time: dt, value: d.closes[i] }))
-    .filter(p => p.value != null && p.time >= cutStr)
-    .sort((a, b) => (a.time < b.time ? -1 : 1));
+function _seriesData(id, range) {
+  const sd = _lcData[id]?.series?.[range];
+  if (!sd?.times?.length) return [];
+  return sd.times
+    .map((t, i) => ({ time: t, value: sd.closes[i] }))
+    .filter(p => p.value != null);
 }
 
 function _statsHTML(d) {
@@ -3715,14 +3716,18 @@ function renderIndexCard(id, name, exchange, d) {
     return;
   }
 
-  _lcData[id]        = { ...d, _displayPrice: d.price };
-  _lcRange[id]       = _lcRange[id] || "3M";
+  _lcRange[id] = _lcRange[id] || "3mo";
+  _lcData[id]  = {
+    price: d.price, prevClose: d.prevClose, high: d.high, low: d.low,
+    _displayPrice: d.price,
+    series: { ..._lcData[id]?.series, [_lcRange[id]]: { times: d.times, closes: d.closes, intraday: d.intraday || false } },
+  };
   _lcLastRefresh[id] = Date.now();
 
   const { isUp, clr, pct, pts, now } = _statsHTML(d);
   const liveBg  = isUp == null ? "var(--bg3)"    : isUp ? "var(--green3)"  : "var(--red3)";
   const liveClr = isUp == null ? "var(--muted)"  : isUp ? "var(--green)"   : "var(--red)";
-  const r       = _lcRange[id];
+  const curR    = _lcRange[id];
 
   el.innerHTML = `
     <div class="idx-header">
@@ -3740,8 +3745,7 @@ function renderIndexCard(id, name, exchange, d) {
     </div>
     <div class="idx-refresh" id="${id}_refresh">Just updated</div>
     <div class="idx-rangebar">
-      <button class="range-btn${r==="1M"?" active":""}" onclick="setIdxRange('${id}','1M')">1M</button>
-      <button class="range-btn${r==="3M"?" active":""}" onclick="setIdxRange('${id}','3M')">3M</button>
+      ${IDX_RANGES.map(r => `<button class="range-btn${r.range===curR?" active":""}" data-range="${r.range}" onclick="setIdxRange('${id}','${r.range}')">${r.label}</button>`).join("")}
     </div>
     <div id="${id}_lc" class="idx-chart-wrap"></div>`;
 
@@ -3752,10 +3756,11 @@ function _initChart(id) {
   const container = document.getElementById(`${id}_lc`);
   if (!container || !_lcData[id]) return;
 
-  const months = _lcRange[id] === "1M" ? 1 : 3;
-  const data   = _rangeData(id, months);
+  const range = _lcRange[id] || "3mo";
+  const data  = _seriesData(id, range);
   if (data.length < 2) return;
 
+  const intraday = _lcData[id].series?.[range]?.intraday || false;
   const base    = data[0].value;
   const last    = data[data.length - 1].value;
 
@@ -3783,7 +3788,7 @@ function _initChart(id) {
     },
     timeScale: {
       borderColor:  "#D5DAF0",
-      timeVisible:  false,
+      timeVisible:  intraday,
       fixLeftEdge:  true,
       fixRightEdge: true,
     },
@@ -3818,21 +3823,42 @@ function _initChart(id) {
   _lcCharts[id] = { chart, series, priceLine };
 }
 
-function setIdxRange(id, range) {
+async function setIdxRange(id, range) {
   _lcRange[id] = range;
   document.querySelectorAll(`#${id} .range-btn`).forEach(btn => {
-    btn.classList.toggle("active", btn.textContent === range);
+    btn.classList.toggle("active", btn.dataset.range === range);
   });
-  if (!_lcCharts[id]) return;
-  const months = range === "1M" ? 1 : 3;
-  const data   = _rangeData(id, months);
-  if (data.length < 2) return;
-  const base = data[0].value;
-  const last = data[data.length - 1].value;
-  const { series, chart } = _lcCharts[id];
-  series.applyOptions({ baseValue: { type: "price", price: base } });
-  series.setData(data);
-  chart.timeScale().fitContent();
+
+  if (_lcData[id]?.series?.[range]) {
+    _rebuildIdxChart(id);
+    return;
+  }
+
+  // Fetch this range on demand
+  const wrap = document.getElementById(`${id}_lc`);
+  if (wrap) wrap.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;gap:6px;color:var(--muted);font-size:11px"><div style="width:14px;height:14px;border:2px solid var(--bdr);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite"></div>Loading…</div>`;
+
+  try {
+    const res  = await fetch(`/.netlify/functions/index-data?range=${range}`);
+    const data = await res.json();
+    if (!data.ok) return;
+    const sym = id === "idx_nifty" ? "nifty" : "sensex";
+    const d   = data[sym];
+    if (!d || d.error) return;
+    if (!_lcData[id]) _lcData[id] = { series: {} };
+    _lcData[id].series[range] = { times: d.times, closes: d.closes, intraday: d.intraday || false };
+    _rebuildIdxChart(id);
+  } catch(e) {
+    console.warn("setIdxRange:", e.message);
+  }
+}
+
+function _rebuildIdxChart(id) {
+  if (_lcCharts[id]) {
+    try { _lcCharts[id].chart.remove(); } catch(_) {}
+    delete _lcCharts[id];
+  }
+  requestAnimationFrame(() => _initChart(id));
 }
 
 function _animatePrice(el, fromVal, toVal, isUp) {
@@ -3863,7 +3889,13 @@ function _updateStats(id, d) {
   if (!priceEl) return;
 
   const prevPrice = _lcData[id]?._displayPrice ?? d.price;
-  _lcData[id] = { ..._lcData[id], ...d, _displayPrice: d.price };
+  // Merge only meta fields — preserve cached series data
+  _lcData[id] = {
+    ..._lcData[id],
+    price: d.price, prevClose: d.prevClose, high: d.high, low: d.low,
+    _displayPrice: d.price,
+    series: d.times ? { ..._lcData[id]?.series, "3mo": { times: d.times, closes: d.closes, intraday: false } } : (_lcData[id]?.series || {}),
+  };
 
   const { isUp, clr, pct, pts, now } = _statsHTML(d);
   const priceChanged = Math.abs(d.price - prevPrice) > 0.01;
@@ -3893,8 +3925,14 @@ function _updateStats(id, d) {
   }
 
   if (_lcCharts[id]) {
-    const today = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
-    try { _lcCharts[id].series.update({ time: today, value: d.price }); } catch(_) {}
+    const curRange = _lcRange[id] || "3mo";
+    const isIntra  = _lcData[id]?.series?.[curRange]?.intraday;
+    if (isIntra) {
+      try { _lcCharts[id].series.update({ time: Math.floor(Date.now() / 1000), value: d.price }); } catch(_) {}
+    } else {
+      const today = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+      try { _lcCharts[id].series.update({ time: today, value: d.price }); } catch(_) {}
+    }
   }
 }
 
