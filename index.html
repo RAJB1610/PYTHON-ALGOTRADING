@@ -3788,6 +3788,21 @@ function _statsHTML(d) {
   return { isUp, clr, pct, pts, now };
 }
 
+function _refreshHL(id) {
+  const hlEl = document.getElementById(`${id}_hl`);
+  if (!hlEl) return;
+  const range = _lcRange[id] || "3mo";
+  const sd    = _lcData[id]?.series?.[range];
+  const meta  = _lcData[id];
+  const now   = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
+  let high = meta?.high, low = meta?.low;
+  if (sd?.closes?.length) {
+    const v = sd.closes.filter(c => c != null);
+    if (v.length) { high = Math.max(...v); low = Math.min(...v); }
+  }
+  hlEl.innerHTML = `<span>H&nbsp;${_fmtINR(high)}</span><span>L&nbsp;${_fmtINR(low)}</span><span class="idx-hl-time">${now} IST</span>`;
+}
+
 function renderIndexCard(id, name, exchange, d) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -3918,6 +3933,7 @@ async function setIdxRange(id, range) {
   });
 
   if (_lcData[id]?.series?.[range]) {
+    _refreshHL(id);
     _rebuildIdxChart(id);
     return;
   }
@@ -3935,6 +3951,20 @@ async function setIdxRange(id, range) {
     if (!d || d.error) return;
     if (!_lcData[id]) _lcData[id] = { series: {} };
     _lcData[id].series[range] = { times: d.times, closes: d.closes, intraday: d.intraday || false };
+    // Update live price + change display from fresh fetch
+    if (d.price) {
+      _lcData[id].price     = d.price;
+      _lcData[id].prevClose = d.prevClose;
+      _lcData[id]._displayPrice = d.price;
+      const priceEl = document.getElementById(`${id}_price`);
+      const pctEl   = document.getElementById(`${id}_pct`);
+      const ptsEl   = document.getElementById(`${id}_pts`);
+      const { clr, pct, pts } = _statsHTML(d);
+      if (priceEl) priceEl.textContent = _fmtINR(d.price);
+      if (pctEl)   { pctEl.textContent = pct; pctEl.style.color = clr; }
+      if (ptsEl)   { ptsEl.textContent = pts; ptsEl.style.color = clr; }
+    }
+    _refreshHL(id);
     _rebuildIdxChart(id);
   } catch(e) {
     console.warn("setIdxRange:", e.message);
@@ -3997,9 +4027,7 @@ function _updateStats(id, d) {
   if (pctEl) { pctEl.textContent = pct; pctEl.style.color = clr; }
   if (ptsEl) { ptsEl.textContent = pts; ptsEl.style.color = clr; }
 
-  if (hlEl) hlEl.innerHTML = `
-    <span>H&nbsp;${_fmtINR(d.high)}</span><span>L&nbsp;${_fmtINR(d.low)}</span>
-    <span class="idx-hl-time">${now} IST</span>`;
+  _refreshHL(id);
 
   if (refreshEl) {
     _lcLastRefresh[id] = Date.now();
