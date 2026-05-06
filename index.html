@@ -3795,12 +3795,20 @@ function _refreshHL(id) {
   const sd    = _lcData[id]?.series?.[range];
   const meta  = _lcData[id];
   const now   = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
-  let high = meta?.high, low = meta?.low;
+  let high = meta?.high, low = meta?.low, periodRet = null;
   if (sd?.closes?.length) {
     const v = sd.closes.filter(c => c != null);
-    if (v.length) { high = Math.max(...v); low = Math.min(...v); }
+    if (v.length) {
+      high = Math.max(...v);
+      low  = Math.min(...v);
+      if (v.length >= 2) periodRet = (v[v.length - 1] - v[0]) / v[0] * 100;
+    }
   }
-  hlEl.innerHTML = `<span>H&nbsp;${_fmtINR(high)}</span><span>L&nbsp;${_fmtINR(low)}</span><span class="idx-hl-time">${now} IST</span>`;
+  const rangeLabel = IDX_RANGES.find(r => r.range === range)?.label || range.toUpperCase();
+  const retBadge   = periodRet != null
+    ? `<span style="font-weight:700;color:${periodRet >= 0 ? "var(--green)" : "var(--red)"}">${periodRet >= 0 ? "+" : ""}${periodRet.toFixed(1)}%&nbsp;(${rangeLabel})</span>`
+    : "";
+  hlEl.innerHTML = `<span>H&nbsp;${_fmtINR(high)}</span><span>L&nbsp;${_fmtINR(low)}</span>${retBadge}<span class="idx-hl-time">${now} IST</span>`;
 }
 
 function renderIndexCard(id, name, exchange, d) {
@@ -3826,8 +3834,12 @@ function renderIndexCard(id, name, exchange, d) {
   _lcLastRefresh[id] = Date.now();
 
   const { isUp, clr, pct, pts, now } = _statsHTML(d);
-  const liveBg  = isUp == null ? "var(--bg3)"    : isUp ? "var(--green3)"  : "var(--red3)";
-  const liveClr = isUp == null ? "var(--muted)"  : isUp ? "var(--green)"   : "var(--red)";
+  const isSx    = id === "idx_sensex";
+  const upBg    = isSx ? "var(--blue3)"  : "var(--green3)";
+  const upClrH  = isSx ? "var(--blue)"   : "var(--green)";
+  const liveBg  = isUp == null ? "var(--bg3)"  : isUp ? upBg  : "var(--red3)";
+  const liveClr = isUp == null ? "var(--muted)" : isUp ? upClrH : "var(--red)";
+  const priceClr = isUp == null ? "var(--txt)" : isUp ? upClrH : "var(--red)";
   const curR    = _lcRange[id];
 
   el.innerHTML = `
@@ -3836,7 +3848,7 @@ function renderIndexCard(id, name, exchange, d) {
       <span class="idx-live-dot" style="background:${liveBg};color:${liveClr}">LIVE</span>
     </div>
     <div class="idx-price-row" id="${id}_stats">
-      <span class="idx-price" id="${id}_price">${_fmtINR(d.price)}</span>
+      <span class="idx-price" id="${id}_price" style="color:${priceClr}">${_fmtINR(d.price)}</span>
       <span class="idx-chg-pct" id="${id}_pct" style="color:${clr}">${pct}</span>
       <span class="idx-chg-pts" id="${id}_pts" style="color:${clr}">${pts}</span>
     </div>
@@ -3899,11 +3911,17 @@ function _initChart(id) {
     handleScale:  true,
   });
 
+  // Nifty = green, Sensex = blue — visually distinguishable even when shapes correlate
+  const isSensex = id === "idx_sensex";
+  const upClr    = isSensex ? "#185FA5" : "#1D9E75";
+  const upFill1  = isSensex ? "rgba(24,95,165,0.22)"  : "rgba(29,158,117,0.22)";
+  const upFill2  = isSensex ? "rgba(24,95,165,0.02)"  : "rgba(29,158,117,0.02)";
+
   const series = chart.addBaselineSeries({
     baseValue:       { type: "price", price: base },
-    topLineColor:    "#1D9E75",
-    topFillColor1:   "rgba(29,158,117,0.22)",
-    topFillColor2:   "rgba(29,158,117,0.02)",
+    topLineColor:    upClr,
+    topFillColor1:   upFill1,
+    topFillColor2:   upFill2,
     bottomLineColor: "#E24B4A",
     bottomFillColor1:"rgba(226,75,74,0.02)",
     bottomFillColor2:"rgba(226,75,74,0.22)",
@@ -3915,7 +3933,7 @@ function _initChart(id) {
 
   const priceLine = series.createPriceLine({
     price:             last,
-    color:             last >= base ? "#1D9E75" : "#E24B4A",
+    color:             last >= base ? upClr : "#E24B4A",
     lineWidth:         1,
     lineStyle:         LightweightCharts.LineStyle.Dashed,
     axisLabelVisible:  true,
@@ -4016,6 +4034,9 @@ function _updateStats(id, d) {
   };
 
   const { isUp, clr, pct, pts, now } = _statsHTML(d);
+  const isSx     = id === "idx_sensex";
+  const upClrH   = isSx ? "var(--blue)" : "var(--green)";
+  const priceClr = isUp == null ? "var(--txt)" : isUp ? upClrH : "var(--red)";
   const priceChanged = Math.abs(d.price - prevPrice) > 0.01;
 
   if (priceChanged) {
@@ -4023,6 +4044,7 @@ function _updateStats(id, d) {
   } else {
     priceEl.textContent = _fmtINR(d.price);
   }
+  priceEl.style.color = priceClr;
 
   if (pctEl) { pctEl.textContent = pct; pctEl.style.color = clr; }
   if (ptsEl) { ptsEl.textContent = pts; ptsEl.style.color = clr; }
@@ -4036,8 +4058,9 @@ function _updateStats(id, d) {
 
   const dot = document.querySelector(`#${id} .idx-live-dot`);
   if (dot) {
-    dot.style.background = isUp == null ? "var(--bg3)"   : isUp ? "var(--green3)"  : "var(--red3)";
-    dot.style.color      = isUp == null ? "var(--muted)" : isUp ? "var(--green)"   : "var(--red)";
+    const upBg = isSx ? "var(--blue3)" : "var(--green3)";
+    dot.style.background = isUp == null ? "var(--bg3)"   : isUp ? upBg    : "var(--red3)";
+    dot.style.color      = isUp == null ? "var(--muted)" : isUp ? upClrH  : "var(--red)";
   }
 
   if (_lcCharts[id]) {
