@@ -7,6 +7,7 @@
 <meta name="kite-api-key" content="">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 /* ── Design tokens — Light theme ────────────────────────────────────────── */
 :root {
@@ -41,7 +42,7 @@ body { background: var(--bg); color: var(--txt); font-family: var(--font); min-h
 .idx-chg.dn { background: var(--red3);   color: var(--red);   }
 .idx-chg.na { background: var(--bg3);    color: var(--muted); }
 .idx-meta  { font-size: 10px; color: var(--muted); font-family: var(--mono); margin: 4px 0 10px; display: flex; gap: 10px; flex-wrap: wrap; }
-.idx-chart { display: block; width: 100%; line-height: 0; }
+.idx-chart-wrap { height: 170px; border-top: 1px solid var(--bdr); }
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
 header {
@@ -3174,72 +3175,126 @@ loadIndexCharts();
 setInterval(loadIndexCharts, 5 * 60 * 1000); // refresh every 5 min
 
 // ════════════════════════════════════════════════════════════════════════════
-// INDEX CHARTS — Nifty 50 + Sensex via Yahoo Finance
+// INDEX CHARTS — Nifty 50 + Sensex via Yahoo Finance + Lightweight Charts
 // ════════════════════════════════════════════════════════════════════════════
-function sparklineSVG(closes, color, isUp) {
-  const vals = closes.filter(c => c != null);
-  if (vals.length < 2) return "";
-  const mn = Math.min(...vals), mx = Math.max(...vals), rng = mx - mn || 1;
-  const W = 600, H = 72, PAD = 2;
-  const pts = vals.map((c, i) =>
-    `${(i / (vals.length - 1) * W).toFixed(1)},${(PAD + (H - PAD*2) - (c - mn) / rng * (H - PAD*2)).toFixed(1)}`
-  ).join(" ");
-  const gradId = `sg_${color.replace('#','')}`;
-  const lineColor = isUp === false ? "#E24B4A" : isUp === true ? "#1D9E75" : color;
-  const fillColor = isUp === false ? "#E24B4A" : isUp === true ? "#1D9E75" : color;
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="idx-chart" style="height:72px">
-    <defs>
-      <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%"   stop-color="${fillColor}" stop-opacity="0.18"/>
-        <stop offset="100%" stop-color="${fillColor}" stop-opacity="0.01"/>
-      </linearGradient>
-    </defs>
-    <polygon points="${pts} ${W},${H} 0,${H}" fill="url(#${gradId})"/>
-    <polyline points="${pts}" fill="none" stroke="${lineColor}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-  </svg>`;
-}
+const _lcCharts = {};
 
-function renderIndexCard(id, name, exchange, d, color) {
+function renderIndexCard(id, name, exchange, d) {
   const el = document.getElementById(id);
   if (!el) return;
+
+  // Destroy old chart instance before re-rendering
+  if (_lcCharts[id]) { try { _lcCharts[id].remove(); } catch(_) {} delete _lcCharts[id]; }
+
   if (!d || d.error) {
     el.innerHTML = `<div class="idx-top"><div class="idx-label">${name} · ${exchange}</div><div style="font-size:12px;color:var(--muted);padding-bottom:14px">Data unavailable</div></div>`;
     return;
   }
+
   const chg    = d.prevClose ? (d.price - d.prevClose) / d.prevClose * 100 : null;
   const isUp   = chg == null ? null : chg >= 0;
   const chgStr = chg != null ? `${chg >= 0 ? "▲" : "▼"} ${Math.abs(chg).toFixed(2)}%` : "—";
   const chgCls = chg == null ? "na" : chg >= 0 ? "up" : "dn";
   const fmt    = n => n != null ? "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—";
-  const pts    = d.prevClose ? `+${(d.price - d.prevClose).toLocaleString("en-IN", { maximumFractionDigits: 2 })}` : "";
+  const ptsDiff = d.prevClose ? (d.price - d.prevClose) : null;
+  const ptsStr  = ptsDiff != null ? `(${ptsDiff >= 0 ? "+" : ""}${ptsDiff.toLocaleString("en-IN", { maximumFractionDigits: 2 })})` : "";
   const now    = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
+
+  const lineColor = isUp === false ? "#E24B4A" : "#1D9E75";
+  const topColor  = isUp === false ? "rgba(226,75,74,0.25)"  : "rgba(29,158,117,0.25)";
+  const botColor  = isUp === false ? "rgba(226,75,74,0.02)"  : "rgba(29,158,117,0.02)";
+  const chartId   = `${id}_lc`;
+
   el.innerHTML = `
     <div class="idx-top">
       <div class="idx-label">
-        <span>${name} <span style="opacity:.55">· ${exchange} · INR</span></span>
+        <span>${name} <span style="opacity:.5">· ${exchange} · INR</span></span>
         <span style="font-size:9px;background:${isUp===null?"var(--bg4)":isUp?"var(--green3)":"var(--red3)"};color:${isUp===null?"var(--muted)":isUp?"var(--green)":"var(--red)"};padding:2px 7px;border-radius:6px;font-weight:700">● LIVE</span>
       </div>
-      <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:5px">
+      <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:5px;flex-wrap:wrap">
         <span class="idx-price">${fmt(d.price)}</span>
         <span class="idx-chg ${chgCls}">${chgStr}</span>
-        ${pts ? `<span style="font-size:11px;color:var(--muted);font-family:var(--mono)">(${pts})</span>` : ""}
+        <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">${ptsStr}</span>
       </div>
       <div class="idx-meta">
         <span>H&nbsp;${fmt(d.high)}</span>
         <span>L&nbsp;${fmt(d.low)}</span>
-        <span style="color:var(--dim)">${now} IST</span>
+        <span style="color:var(--dim)">${now} IST · 3-month daily</span>
       </div>
     </div>
-    ${sparklineSVG(d.closes, color, isUp)}`;
+    <div id="${chartId}" class="idx-chart-wrap"></div>`;
+
+  // Build series data — filter nulls, ensure ascending time order
+  const seriesData = d.dates
+    .map((dt, i) => ({ time: dt, value: d.closes[i] }))
+    .filter(p => p.value != null)
+    .sort((a, b) => a.time < b.time ? -1 : 1);
+
+  if (!seriesData.length) return;
+
+  const container = document.getElementById(chartId);
+  const chart = LightweightCharts.createChart(container, {
+    width:  container.offsetWidth,
+    height: 170,
+    layout: {
+      background: { type: "solid", color: "transparent" },
+      textColor:  "#6272A0",
+      fontSize:   11,
+      fontFamily: "'JetBrains Mono', monospace",
+    },
+    grid: {
+      vertLines: { color: "#E2E6F3" },
+      horzLines: { color: "#E2E6F3" },
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: { color: "#6272A0", width: 1, style: 1, labelBackgroundColor: "#6272A0" },
+      horzLine: { color: "#6272A0", width: 1, style: 1, labelBackgroundColor: "#6272A0" },
+    },
+    rightPriceScale: {
+      borderColor: "#D5DAF0",
+      scaleMargins: { top: 0.08, bottom: 0.06 },
+    },
+    timeScale: {
+      borderColor: "#D5DAF0",
+      timeVisible: true,
+      tickMarkFormatter: t => {
+        const d = new Date(t * 1000);
+        return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+      }
+    },
+    handleScroll:  { mouseWheel: true, pressedMouseMove: true },
+    handleScale:   { mouseWheel: true, pinch: true },
+  });
+
+  const area = chart.addAreaSeries({
+    lineColor,
+    topColor,
+    bottomColor: botColor,
+    lineWidth: 2,
+    priceFormat: { type: "price", precision: 2, minMove: 0.01 },
+  });
+
+  area.setData(seriesData);
+  chart.timeScale().fitContent();
+  _lcCharts[id] = chart;
 }
+
+// Resize charts when window resizes
+window.addEventListener("resize", () => {
+  for (const [id, chart] of Object.entries(_lcCharts)) {
+    const wrap = document.getElementById(`${id}_lc`);
+    if (wrap) chart.applyOptions({ width: wrap.offsetWidth });
+  }
+});
 
 async function loadIndexCharts() {
   try {
     const res  = await fetch("/.netlify/functions/index-data");
     const data = await res.json();
     if (!data.ok) return;
-    renderIndexCard("idx_nifty",  "Nifty 50", "NSE", data.nifty,  "#0F6E56");
-    renderIndexCard("idx_sensex", "Sensex",   "BSE", data.sensex, "#185FA5");
+    renderIndexCard("idx_nifty",  "Nifty 50", "NSE", data.nifty);
+    renderIndexCard("idx_sensex", "Sensex",   "BSE", data.sensex);
   } catch(e) { console.warn("index-data:", e.message); }
 }
 </script>
