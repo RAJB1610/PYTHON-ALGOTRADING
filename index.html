@@ -3756,6 +3756,8 @@ function _initChart(id) {
   const container = document.getElementById(`${id}_lc`);
   if (!container || !_lcData[id]) return;
 
+  container.innerHTML = "";   // clear any loading spinner or stale chart content
+
   const range = _lcRange[id] || "3mo";
   const data  = _seriesData(id, range);
   if (data.length < 2) return;
