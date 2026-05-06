@@ -70,13 +70,11 @@ exports.handler = async (event) => {
 
 // ── Fetch ───────────────────────────────────────────────────────────────────
 
-// NSE blocks server-side requests via Cloudflare — BSE bhavcopy covers all NSE-listed stocks.
-// BSE is a superset of NSE for equity instruments, so BSE-only data is sufficient for analysis.
+// NSE bhavcopy is a ZIP archive (since July 2024). BSE is a plain CSV.
+const NSE_URL = date =>
+  `https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_${date}_F_0000.csv.zip`;
 const BSE_URL = date =>
   `https://www.bseindia.com/download/BhavCopy/Equity/BhavCopy_BSE_CM_0_0_0_${date}_F_0000.csv`;
-
-const NSE_URL = date =>
-  `https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_${date}_F_0000.csv`;
 
 const FETCH_HEADERS = {
   "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -92,6 +90,17 @@ async function fetchBhavcopy(exchange, date) {
     signal: AbortSignal.timeout(30000)
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  if (exchange === "NSE") {
+    // NSE file is a ZIP — extract the CSV inside it
+    const { unzipSync } = require("fflate");
+    const buf      = await res.arrayBuffer();
+    const unzipped = unzipSync(new Uint8Array(buf));
+    const csvFile  = Object.values(unzipped)[0];
+    if (!csvFile) throw new Error("ZIP was empty");
+    return new TextDecoder().decode(csvFile);
+  }
+
   const text = await res.text();
   if (text.trim().startsWith("<")) throw new Error("Got HTML instead of CSV — blocked by exchange");
   return text;
