@@ -275,6 +275,14 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
 
     <div class="summary" id="techSummary"></div>
 
+    <!-- Pagination top -->
+    <div id="techPagerTop" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <button class="btn" id="pgPrevT" onclick="techPageNav(-1)">← Prev</button>
+      <span id="pgInfoT" style="font-size:12px;color:var(--muted);font-family:var(--mono)"></span>
+      <button class="btn" id="pgNextT" onclick="techPageNav(1)">Next →</button>
+      <span style="font-size:11px;color:var(--dim);margin-left:4px">50 per page</span>
+    </div>
+
     <div class="tbl-wrap">
       <table>
         <thead><tr>
@@ -888,12 +896,16 @@ function renderTech() {
     <div class="sum-card" style="${vfAct("av")}" onclick="setVerdictF('av')"><div class="sum-n" style="color:var(--muted)">${av}</div><div class="sum-l">Avoid</div></div>
     <div class="sum-card"><div class="sum-n">${rows.length}</div><div class="sum-l">Loaded</div></div>`;
 
-  // Pagination controls
-  const pager = document.getElementById("techPager");
-  pager.style.display = total > PAGE_SIZE ? "flex" : "none";
-  document.getElementById("pgInfo").textContent  = `Page ${techPage + 1} of ${totalPages}`;
-  document.getElementById("pgPrev").disabled     = techPage === 0;
-  document.getElementById("pgNext").disabled     = techPage >= totalPages - 1;
+  // Pagination controls — sync top and bottom pagers
+  const showPager = total > PAGE_SIZE;
+  const pgLabel   = `Page ${techPage + 1} of ${totalPages}`;
+  ["techPager","techPagerTop"].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.display = showPager ? "flex" : "none";
+  });
+  ["pgInfo","pgInfoT"].forEach(id => document.getElementById(id).textContent = pgLabel);
+  ["pgPrev","pgPrevT"].forEach(id => document.getElementById(id).disabled = techPage === 0);
+  ["pgNext","pgNextT"].forEach(id => document.getElementById(id).disabled = techPage >= totalPages - 1);
 
   const tbody = document.getElementById("techBody");
   tbody.innerHTML = "";
