@@ -3257,11 +3257,7 @@ function renderIndexCard(id, name, exchange, d) {
     },
     timeScale: {
       borderColor: "#D5DAF0",
-      timeVisible: true,
-      tickMarkFormatter: t => {
-        const d = new Date(t * 1000);
-        return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
-      }
+      timeVisible: false,
     },
     handleScroll:  { mouseWheel: true, pressedMouseMove: true },
     handleScale:   { mouseWheel: true, pinch: true },
