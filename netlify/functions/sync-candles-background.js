@@ -70,15 +70,13 @@ exports.handler = async (event) => {
 
 // ── Fetch ───────────────────────────────────────────────────────────────────
 
-// NSE has multiple possible URL patterns depending on when the file was published
-const NSE_URLS = date => [
-  `https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_${date}_F_0000.csv`,
-  `https://archives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_${date}_F_0000.csv`,
-  `https://www.nseindia.com/content/historical/EQUITIES/${date.slice(0,4)}/${monthAbbr(date)}/cm${date.slice(6,8)}${monthAbbr(date)}${date.slice(0,4)}bhav.csv.zip`
-];
-
+// NSE blocks server-side requests via Cloudflare — BSE bhavcopy covers all NSE-listed stocks.
+// BSE is a superset of NSE for equity instruments, so BSE-only data is sufficient for analysis.
 const BSE_URL = date =>
   `https://www.bseindia.com/download/BhavCopy/Equity/BhavCopy_BSE_CM_0_0_0_${date}_F_0000.csv`;
+
+const NSE_URL = date =>
+  `https://nsearchives.nseindia.com/content/cm/BhavCopy_NSE_CM_0_0_0_${date}_F_0000.csv`;
 
 const FETCH_HEADERS = {
   "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -87,40 +85,16 @@ const FETCH_HEADERS = {
 };
 
 async function fetchBhavcopy(exchange, date) {
-  if (exchange === "BSE") {
-    const res = await fetch(BSE_URL(date), {
-      headers: { ...FETCH_HEADERS, Referer: "https://www.bseindia.com/" },
-      signal: AbortSignal.timeout(30000)
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-    if (text.trim().startsWith("<")) throw new Error("Got HTML instead of CSV");
-    return text;
-  }
-
-  // NSE — try each URL pattern in order
-  const urls = NSE_URLS(date);
-  const errs = [];
-  for (const url of urls) {
-    try {
-      const res = await fetch(url, {
-        headers: { ...FETCH_HEADERS, Referer: "https://nseindia.com/" },
-        signal: AbortSignal.timeout(20000)
-      });
-      if (!res.ok) { errs.push(`${url.split("/").pop()}: HTTP ${res.status}`); continue; }
-      const text = await res.text();
-      if (text.trim().startsWith("<")) { errs.push(`${url.split("/").pop()}: got HTML`); continue; }
-      return text;
-    } catch (e) {
-      errs.push(`${url.split("/").pop()}: ${e.message}`);
-    }
-  }
-  throw new Error(`All NSE URLs failed — ${errs.join(" | ")}`);
-}
-
-function monthAbbr(yyyymmdd) {
-  const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-  return months[parseInt(yyyymmdd.slice(4, 6), 10) - 1];
+  const url     = exchange === "NSE" ? NSE_URL(date) : BSE_URL(date);
+  const referer = exchange === "NSE" ? "https://nseindia.com/" : "https://www.bseindia.com/";
+  const res     = await fetch(url, {
+    headers: { ...FETCH_HEADERS, Referer: referer },
+    signal: AbortSignal.timeout(30000)
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const text = await res.text();
+  if (text.trim().startsWith("<")) throw new Error("Got HTML instead of CSV — blocked by exchange");
+  return text;
 }
 
 // ── Parse ───────────────────────────────────────────────────────────────────
