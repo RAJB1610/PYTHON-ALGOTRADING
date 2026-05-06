@@ -30,18 +30,25 @@ body { background: var(--bg); color: var(--txt); font-family: var(--font); min-h
 .idx-header     { display:flex; justify-content:space-between; align-items:center; padding:14px 16px 6px; }
 .idx-name       { font-size:13px; font-weight:700; letter-spacing:-.2px; }
 .idx-exch       { font-size:10px; color:var(--muted); font-weight:600; margin-left:6px; }
-.idx-live-dot   { font-size:9px; font-weight:700; padding:2px 8px; border-radius:6px; }
+.idx-live-dot   { font-size:9px; font-weight:700; padding:2px 8px; border-radius:6px; display:flex; align-items:center; gap:5px; }
+.idx-live-dot::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; animation:livePing 1.5s ease-in-out infinite; }
 .idx-price-row  { padding:2px 16px 0; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
-.idx-price      { font-size:28px; font-weight:800; font-family:var(--mono); letter-spacing:-1.5px; line-height:1.1; }
+.idx-price      { font-size:28px; font-weight:800; font-family:var(--mono); letter-spacing:-1.5px; line-height:1.1; border-radius:5px; padding:0 3px; transition:background .15s; }
+.idx-price.flash-up { animation:flashUp .7s ease forwards; }
+.idx-price.flash-dn { animation:flashDn .7s ease forwards; }
 .idx-chg-pct    { font-size:15px; font-weight:700; }
 .idx-chg-pts    { font-size:12px; font-family:var(--mono); }
-.idx-hl-row     { padding:4px 16px 6px; font-size:10px; color:var(--muted); font-family:var(--mono); display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+.idx-hl-row     { padding:4px 16px 2px; font-size:10px; color:var(--muted); font-family:var(--mono); display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
 .idx-hl-time    { color:var(--dim); margin-left:auto; }
-.idx-rangebar   { padding:4px 12px 8px; display:flex; gap:3px; }
+.idx-refresh    { padding:2px 16px 6px; font-size:10px; color:var(--dim); font-family:var(--mono); }
+.idx-rangebar   { padding:2px 12px 8px; display:flex; gap:3px; }
 .range-btn      { font-size:11px; font-weight:600; padding:3px 10px; border-radius:5px; border:1px solid transparent; background:transparent; color:var(--muted); cursor:pointer; font-family:var(--font); transition:.1s; }
 .range-btn:hover{ background:var(--bg3); color:var(--txt); }
 .range-btn.active{ background:var(--bg4); color:var(--txt); border-color:var(--bdr2); }
 .idx-chart-wrap { height:215px; border-top:1px solid var(--bdr); }
+@keyframes livePing { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.35;transform:scale(.7)} }
+@keyframes flashUp  { 0%{background:rgba(29,158,117,.25)} 100%{background:transparent} }
+@keyframes flashDn  { 0%{background:rgba(226,75,74,.2)}   100%{background:transparent} }
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
 header {
@@ -3171,14 +3178,15 @@ checkKiteReturn();
 startScan();
 scheduleAuto();
 loadIndexCharts();
-setInterval(loadIndexCharts, 60 * 1000); // refresh every 60s for live price tracking
+setInterval(loadIndexCharts, 15 * 1000); // poll every 15s for live price tracking
 
 // ════════════════════════════════════════════════════════════════════════════
 // INDEX CHARTS — Google Finance style via Lightweight Charts + Yahoo Finance
 // ════════════════════════════════════════════════════════════════════════════
-const _lcCharts = {};   // { id: { chart, series, priceLine } }
-const _lcData   = {};   // { id: { dates[], closes[], price, prevClose, high, low } }
-const _lcRange  = {};   // { id: '1M' | '3M' }
+const _lcCharts      = {};   // { id: { chart, series, priceLine } }
+const _lcData        = {};   // { id: { dates[], closes[], price, prevClose, high, low } }
+const _lcRange       = {};   // { id: '1M' | '3M' }
+const _lcLastRefresh = {};   // { id: timestamp }
 
 function _fmtINR(n) {
   return n != null ? "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—";
@@ -3221,8 +3229,9 @@ function renderIndexCard(id, name, exchange, d) {
     return;
   }
 
-  _lcData[id]  = d;
-  _lcRange[id] = _lcRange[id] || "3M";
+  _lcData[id]        = { ...d, _displayPrice: d.price };
+  _lcRange[id]       = _lcRange[id] || "3M";
+  _lcLastRefresh[id] = Date.now();
 
   const { isUp, clr, pct, pts, now } = _statsHTML(d);
   const liveBg  = isUp == null ? "var(--bg3)"    : isUp ? "var(--green3)"  : "var(--red3)";
@@ -3232,17 +3241,18 @@ function renderIndexCard(id, name, exchange, d) {
   el.innerHTML = `
     <div class="idx-header">
       <div><span class="idx-name">${name}</span><span class="idx-exch">${exchange} · INR</span></div>
-      <span class="idx-live-dot" style="background:${liveBg};color:${liveClr}">● LIVE</span>
+      <span class="idx-live-dot" style="background:${liveBg};color:${liveClr}">LIVE</span>
     </div>
     <div class="idx-price-row" id="${id}_stats">
-      <span class="idx-price">${_fmtINR(d.price)}</span>
-      <span class="idx-chg-pct" style="color:${clr}">${pct}</span>
-      <span class="idx-chg-pts" style="color:${clr}">${pts}</span>
+      <span class="idx-price" id="${id}_price">${_fmtINR(d.price)}</span>
+      <span class="idx-chg-pct" id="${id}_pct" style="color:${clr}">${pct}</span>
+      <span class="idx-chg-pts" id="${id}_pts" style="color:${clr}">${pts}</span>
     </div>
     <div class="idx-hl-row" id="${id}_hl">
       <span>H&nbsp;${_fmtINR(d.high)}</span><span>L&nbsp;${_fmtINR(d.low)}</span>
       <span class="idx-hl-time">${now} IST</span>
     </div>
+    <div class="idx-refresh" id="${id}_refresh">Just updated</div>
     <div class="idx-rangebar">
       <button class="range-btn${r==="1M"?" active":""}" onclick="setIdxRange('${id}','1M')">1M</button>
       <button class="range-btn${r==="3M"?" active":""}" onclick="setIdxRange('${id}','3M')">3M</button>
@@ -3339,31 +3349,63 @@ function setIdxRange(id, range) {
   chart.timeScale().fitContent();
 }
 
-function _updateStats(id, d) {
-  const statsEl = document.getElementById(`${id}_stats`);
-  const hlEl    = document.getElementById(`${id}_hl`);
-  if (!statsEl) return;
+function _animatePrice(el, fromVal, toVal, isUp) {
+  if (fromVal === toVal) return;
+  const dur   = 700;
+  const start = performance.now();
+  const diff  = toVal - fromVal;
+  function step(now) {
+    const t    = Math.min((now - start) / dur, 1);
+    const ease = t < .5 ? 2*t*t : -1 + (4 - 2*t)*t;
+    el.textContent = _fmtINR(fromVal + diff * ease);
+    if (t < 1) requestAnimationFrame(step);
+    else el.textContent = _fmtINR(toVal);
+  }
+  requestAnimationFrame(step);
+  el.classList.remove("flash-up", "flash-dn");
+  void el.offsetWidth;
+  el.classList.add(isUp ? "flash-up" : "flash-dn");
+  setTimeout(() => el.classList.remove("flash-up", "flash-dn"), 800);
+}
 
-  _lcData[id] = { ..._lcData[id], ...d };
+function _updateStats(id, d) {
+  const priceEl   = document.getElementById(`${id}_price`);
+  const pctEl     = document.getElementById(`${id}_pct`);
+  const ptsEl     = document.getElementById(`${id}_pts`);
+  const hlEl      = document.getElementById(`${id}_hl`);
+  const refreshEl = document.getElementById(`${id}_refresh`);
+  if (!priceEl) return;
+
+  const prevPrice = _lcData[id]?._displayPrice ?? d.price;
+  _lcData[id] = { ..._lcData[id], ...d, _displayPrice: d.price };
 
   const { isUp, clr, pct, pts, now } = _statsHTML(d);
-  statsEl.innerHTML = `
-    <span class="idx-price">${_fmtINR(d.price)}</span>
-    <span class="idx-chg-pct" style="color:${clr}">${pct}</span>
-    <span class="idx-chg-pts" style="color:${clr}">${pts}</span>`;
+  const priceChanged = Math.abs(d.price - prevPrice) > 0.01;
+
+  if (priceChanged) {
+    _animatePrice(priceEl, prevPrice, d.price, isUp);
+  } else {
+    priceEl.textContent = _fmtINR(d.price);
+  }
+
+  if (pctEl) { pctEl.textContent = pct; pctEl.style.color = clr; }
+  if (ptsEl) { ptsEl.textContent = pts; ptsEl.style.color = clr; }
 
   if (hlEl) hlEl.innerHTML = `
     <span>H&nbsp;${_fmtINR(d.high)}</span><span>L&nbsp;${_fmtINR(d.low)}</span>
     <span class="idx-hl-time">${now} IST</span>`;
 
-  // Update live dot colour
+  if (refreshEl) {
+    _lcLastRefresh[id] = Date.now();
+    refreshEl.textContent = "Just updated";
+  }
+
   const dot = document.querySelector(`#${id} .idx-live-dot`);
   if (dot) {
     dot.style.background = isUp == null ? "var(--bg3)"   : isUp ? "var(--green3)"  : "var(--red3)";
     dot.style.color      = isUp == null ? "var(--muted)" : isUp ? "var(--green)"   : "var(--red)";
   }
 
-  // Push updated last point to the chart
   if (_lcCharts[id]) {
     const today = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
     try { _lcCharts[id].series.update({ time: today, value: d.price }); } catch(_) {}
@@ -3388,6 +3430,16 @@ window.addEventListener("resize", () => {
     if (wrap) lc.chart.applyOptions({ width: wrap.offsetWidth });
   }
 });
+
+// Tick the "updated X sec ago" counter every second
+setInterval(() => {
+  for (const id of ["idx_nifty", "idx_sensex"]) {
+    const el = document.getElementById(`${id}_refresh`);
+    if (!el || !_lcLastRefresh[id]) continue;
+    const sec = Math.round((Date.now() - _lcLastRefresh[id]) / 1000);
+    el.textContent = sec < 5 ? "Just updated" : `Updated ${sec}s ago`;
+  }
+}, 1000);
 </script>
 </body>
 </html>
