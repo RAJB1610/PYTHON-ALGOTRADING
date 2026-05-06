@@ -818,9 +818,9 @@ function renderTech() {
 
   document.getElementById("techCt").textContent = `${filtered.length} of ${rows.length} stocks`;
 
-  // Summary counts
+  // Summary counts — always match what's visible in the table (filtered set)
   let sb=0, b=0, n=0, av=0;
-  rows.forEach(r => {
+  filtered.forEach(r => {
     const bull = r.d.bullCount ?? 0;
     if (bull >= 4) sb++;
     else if (bull === 3) b++;
