@@ -36,7 +36,7 @@ exports.handler = async (event) => {
       : ts.map(t => new Date(t * 1000).toISOString().slice(0, 10));
     return {
       price:     meta.regularMarketPrice,
-      prevClose: meta.chartPreviousClose || meta.previousClose,
+      prevClose: meta.previousClose || meta.chartPreviousClose,
       high:      meta.regularMarketDayHigh,
       low:       meta.regularMarketDayLow,
       intraday,

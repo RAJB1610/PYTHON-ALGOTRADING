@@ -58,7 +58,7 @@ exports.handler = async (event) => {
           shortName:            meta.shortName || meta.longName || symbol,
           currency:             meta.currency  || "INR",
           regularMarketPrice:   meta.regularMarketPrice,
-          previousClose:        meta.chartPreviousClose || meta.previousClose,
+          previousClose:        meta.previousClose || meta.chartPreviousClose,
           regularMarketDayHigh: meta.regularMarketDayHigh,
           regularMarketDayLow:  meta.regularMarketDayLow,
           regularMarketVolume:  meta.regularMarketVolume,
