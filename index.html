@@ -78,6 +78,9 @@ body { background: var(--bg); color: var(--txt); font-family: var(--font); min-h
 .sp-rbtn       { font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;border:1px solid transparent;background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font);transition:.1s; }
 .sp-rbtn:hover { background:var(--bg4);color:var(--txt); }
 .sp-rbtn.active{ background:var(--bg2);color:var(--txt);border-color:var(--bdr2);box-shadow:0 1px 3px rgba(0,0,0,.07); }
+.sp-tbtn       { font-size:12px;padding:3px 9px;border-radius:5px;border:1px solid transparent;background:transparent;color:var(--muted);cursor:pointer;transition:.1s;font-family:var(--font);font-weight:600; }
+.sp-tbtn:hover { background:var(--bg4);color:var(--txt); }
+.sp-tbtn.active{ background:var(--bg2);color:var(--txt);border-color:var(--bdr2);box-shadow:0 1px 3px rgba(0,0,0,.07); }
 .sp-chart-wrap { height:310px;border-bottom:1px solid var(--bdr); }
 .sp-signals    { padding:14px 16px 20px; }
 .sp-sig-title  { font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px; }
@@ -3346,14 +3349,17 @@ let _spSym        = null;
 let _spExch       = null;
 let _spD          = null;
 let _spRange      = "3M";
+let _spChartType  = "candles";   // "candles" | "line"
+let _spCache      = null;        // { sym, exch, range, candles, intraday }
 
 function openStockPanel(sym, exch, d) {
   _spSym = sym; _spExch = exch; _spD = d; _spRange = "3M";
+  _spCache = null;
   document.getElementById("spOverlay").classList.add("open");
   document.getElementById("stockPanel").classList.add("open");
   document.body.style.overflow = "hidden";
   _spRenderStatic(sym, exch, d);
-  _spLoadChart(sym, exch, "3mo", "1d");
+  _spLoadChart(sym, exch, "3mo");
 }
 
 function closeStockPanel() {
@@ -3367,12 +3373,25 @@ function spSetRange(label) {
   _spRange = label;
   document.querySelectorAll(".sp-rbtn").forEach(b => b.classList.toggle("active", b.textContent === label));
   const cfg = SP_RANGES.find(r => r.label === label);
-  if (cfg && _spSym) _spLoadChart(_spSym, _spExch, cfg.range, cfg.interval);
+  if (cfg && _spSym) _spLoadChart(_spSym, _spExch, cfg.range);
 }
 
-async function _spLoadChart(sym, exch, range, interval) {
+function spSetType(type) {
+  _spChartType = type;
+  document.querySelectorAll(".sp-tbtn").forEach(b => b.classList.toggle("active", b.dataset.t === type));
+  if (_spCache) _spDrawChart(_spCache);   // re-draw from cache, no re-fetch
+}
+
+async function _spLoadChart(sym, exch, range) {
   const wrap = document.getElementById("spChartWrap");
   if (!wrap) return;
+
+  // Serve from cache if same sym/exch/range
+  if (_spCache && _spCache.sym === sym && _spCache.exch === exch && _spCache.range === range) {
+    _spDrawChart(_spCache);
+    return;
+  }
+
   wrap.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--muted);font-size:12px"><div style="width:16px;height:16px;border:2px solid var(--bdr);border-top-color:var(--green);border-radius:50%;animation:spin 0.7s linear infinite"></div>Loading chart…</div>`;
   if (_spChart) { try { _spChart.remove(); } catch(_) {} _spChart = null; }
 
@@ -3380,52 +3399,134 @@ async function _spLoadChart(sym, exch, range, interval) {
     const res  = await fetch(`/.netlify/functions/stock-chart?symbol=${encodeURIComponent(sym)}&exchange=${encodeURIComponent(exch)}&range=${range}`);
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || "No data");
-
     if (data.meta) _spUpdateMeta(data.meta);
 
     const intraday = ["1d","5d"].includes(range);
-    const series   = data.timestamps
+    const candles  = data.timestamps
       .map((t, i) => ({
-        time:  intraday ? t : new Date(t * 1000).toISOString().slice(0, 10),
-        open:  data.ohlcv.open[i],
-        high:  data.ohlcv.high[i],
-        low:   data.ohlcv.low[i],
-        close: data.ohlcv.close[i],
+        time:   intraday ? t : new Date(t * 1000).toISOString().slice(0, 10),
+        open:   data.ohlcv.open[i],
+        high:   data.ohlcv.high[i],
+        low:    data.ohlcv.low[i],
+        close:  data.ohlcv.close[i],
+        volume: data.ohlcv.volume[i] ?? 0,
       }))
       .filter(c => c.open != null && c.close != null && c.high != null && c.low != null)
       .sort((a, b) => (a.time < b.time ? -1 : 1));
 
-    if (!series.length) throw new Error("No candles for this range");
+    if (!candles.length) throw new Error("No data for this range");
 
-    wrap.innerHTML = "";
-    const chart = LightweightCharts.createChart(wrap, {
-      width:  wrap.offsetWidth,
-      height: 310,
-      layout: { background: { type:"solid", color:"transparent" }, textColor:"#8896B3", fontSize:11, fontFamily:"'JetBrains Mono', monospace" },
-      grid:   { vertLines:{ color:"#EBEEf6" }, horzLines:{ color:"#EBEEf6" } },
-      crosshair: {
-        mode: LightweightCharts.CrosshairMode.Normal,
-        vertLine: { color:"#94A3B8", width:1, style:1, labelBackgroundColor:"#374151" },
-        horzLine: { color:"#94A3B8", width:1, style:1, labelBackgroundColor:"#374151" },
-      },
-      rightPriceScale: { borderColor:"#D5DAF0", scaleMargins:{ top:0.08, bottom:0.08 } },
-      timeScale: { borderColor:"#D5DAF0", timeVisible: intraday, fixRightEdge:true },
-      handleScroll: true, handleScale: true,
-    });
-
-    const candles = chart.addCandlestickSeries({
-      upColor:"#1D9E75", downColor:"#E24B4A",
-      borderVisible:false,
-      wickUpColor:"#1D9E75", wickDownColor:"#E24B4A",
-    });
-    candles.setData(series);
-    chart.timeScale().fitContent();
-    _spChart = chart;
-
-    new ResizeObserver(() => { if (_spChart) _spChart.applyOptions({ width: wrap.offsetWidth }); }).observe(wrap);
+    _spCache = { sym, exch, range, candles, intraday };
+    _spDrawChart(_spCache);
   } catch(e) {
     wrap.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:12px">${e.message}</div>`;
   }
+}
+
+function _spDrawChart({ candles, intraday }) {
+  const wrap = document.getElementById("spChartWrap");
+  if (!wrap || !candles?.length) return;
+  if (_spChart) { try { _spChart.remove(); } catch(_) {} _spChart = null; }
+  wrap.innerHTML = "";
+  wrap.style.position = "relative";
+
+  const chart = LightweightCharts.createChart(wrap, {
+    width:  wrap.offsetWidth,
+    height: 310,
+    layout: { background: { type:"solid", color:"transparent" }, textColor:"#8896B3", fontSize:11, fontFamily:"'JetBrains Mono', monospace" },
+    grid:   { vertLines:{ color:"#EBEEf6" }, horzLines:{ color:"#EBEEf6" } },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: { color:"#94A3B8", width:1, style:1, labelBackgroundColor:"#374151" },
+      horzLine: { color:"#94A3B8", width:1, style:1, labelBackgroundColor:"#374151" },
+    },
+    rightPriceScale: { borderColor:"#D5DAF0", scaleMargins:{ top:0.06, bottom:0.22 } },
+    timeScale: { borderColor:"#D5DAF0", timeVisible:intraday, fixRightEdge:true },
+    handleScroll: true, handleScale: true,
+  });
+
+  // ── Volume histogram (always shown) ──────────────────────────────────────
+  const volSeries = chart.addHistogramSeries({
+    priceFormat: { type:"volume" },
+    priceScaleId: "vol",
+  });
+  chart.priceScale("vol").applyOptions({ scaleMargins:{ top:0.84, bottom:0 } });
+  volSeries.setData(candles.map(c => ({
+    time:  c.time,
+    value: c.volume,
+    color: c.close >= c.open ? "rgba(29,158,117,.35)" : "rgba(226,75,74,.35)",
+  })));
+
+  // ── Tooltip overlay ───────────────────────────────────────────────────────
+  const tip = document.createElement("div");
+  tip.style.cssText = "position:absolute;top:8px;left:8px;background:rgba(18,24,40,.88);color:#e2e8f0;font-size:10px;font-family:'JetBrains Mono',monospace;padding:6px 11px;border-radius:7px;pointer-events:none;z-index:10;display:none;line-height:1.8;border:1px solid rgba(255,255,255,.07);backdrop-filter:blur(4px)";
+  wrap.appendChild(tip);
+
+  const fmtP = n => n != null ? n.toLocaleString("en-IN", { minimumFractionDigits:2, maximumFractionDigits:2 }) : "—";
+  const fmtT = t => {
+    if (typeof t === "string") return t;
+    return new Date(t * 1000).toLocaleString("en-IN", {
+      timeZone:"Asia/Kolkata", day:"2-digit", month:"short",
+      ...(intraday ? { hour:"2-digit", minute:"2-digit" } : { year:"numeric" })
+    });
+  };
+
+  // ── Main series ───────────────────────────────────────────────────────────
+  let mainSeries;
+
+  if (_spChartType === "candles") {
+    mainSeries = chart.addCandlestickSeries({
+      upColor:"#1D9E75", downColor:"#E24B4A",
+      borderVisible:false,
+      wickUpColor:"#1D9E75", wickDownColor:"#E24B4A",
+      priceFormat:{ type:"price", precision:2, minMove:0.01 },
+    });
+    mainSeries.setData(candles);
+
+    chart.subscribeCrosshairMove(param => {
+      const bar = param.seriesData?.get(mainSeries);
+      if (!param.point || !bar) { tip.style.display = "none"; return; }
+      const dayChg = bar.open ? ((bar.close - bar.open) / bar.open * 100) : null;
+      const isUp   = bar.close >= bar.open;
+      tip.style.display = "block";
+      tip.innerHTML =
+        `<span style="opacity:.55;font-size:9px">${fmtT(param.time)}</span><br>` +
+        `<span style="color:#94A3B8">O</span>&thinsp;${fmtP(bar.open)}&emsp;` +
+        `<span style="color:#1D9E75">H</span>&thinsp;${fmtP(bar.high)}&emsp;` +
+        `<span style="color:#E24B4A">L</span>&thinsp;${fmtP(bar.low)}&emsp;` +
+        `<span style="color:#e2e8f0">C</span>&thinsp;${fmtP(bar.close)}` +
+        (dayChg != null ? `&emsp;<span style="color:${isUp?"#1D9E75":"#E24B4A"}">${isUp?"+":""}${dayChg.toFixed(2)}%</span>` : "");
+    });
+
+  } else {
+    // Baseline area line chart (Google Finance style)
+    const base = candles[0].close;
+    mainSeries = chart.addBaselineSeries({
+      baseValue:        { type:"price", price:base },
+      topLineColor:    "#1D9E75", topFillColor1:"rgba(29,158,117,.18)", topFillColor2:"rgba(29,158,117,.02)",
+      bottomLineColor: "#E24B4A", bottomFillColor1:"rgba(226,75,74,.02)", bottomFillColor2:"rgba(226,75,74,.18)",
+      lineWidth: 2,
+      priceFormat:{ type:"price", precision:2, minMove:0.01 },
+    });
+    mainSeries.setData(candles.map(c => ({ time:c.time, value:c.close })));
+
+    chart.subscribeCrosshairMove(param => {
+      const pt = param.seriesData?.get(mainSeries);
+      if (!param.point || !pt) { tip.style.display = "none"; return; }
+      const chg    = ((pt.value - base) / base * 100);
+      const isUp   = pt.value >= base;
+      tip.style.display = "block";
+      tip.innerHTML =
+        `<span style="opacity:.55;font-size:9px">${fmtT(param.time)}</span><br>` +
+        `<span style="font-size:13px;font-weight:700;color:#e2e8f0">₹${fmtP(pt.value)}</span>` +
+        `&emsp;<span style="color:${isUp?"#1D9E75":"#E24B4A"}">${isUp?"+":""}${chg.toFixed(2)}%</span>` +
+        `<br><span style="opacity:.45;font-size:9px">from period open ₹${fmtP(base)}</span>`;
+    });
+  }
+
+  chart.timeScale().fitContent();
+  _spChart = chart;
+  new ResizeObserver(() => { if (_spChart) _spChart.applyOptions({ width: wrap.offsetWidth }); }).observe(wrap);
 }
 
 function _spRenderStatic(sym, exch, d) {
@@ -3463,8 +3564,14 @@ function _spRenderStatic(sym, exch, d) {
       <div class="sp-stat"><div class="sp-sl">Volume</div><div class="sp-sv" id="spVol2">—</div></div>
     </div>
 
-    <div class="sp-range-bar">
-      ${SP_RANGES.map(r => `<button class="sp-rbtn${r.label===_spRange?" active":""}" onclick="spSetRange('${r.label}')">${r.label}</button>`).join("")}
+    <div class="sp-range-bar" style="display:flex;align-items:center;gap:2px">
+      <div style="display:flex;gap:2px;flex:1">
+        ${SP_RANGES.map(r => `<button class="sp-rbtn${r.label===_spRange?" active":""}" onclick="spSetRange('${r.label}')">${r.label}</button>`).join("")}
+      </div>
+      <div style="display:flex;gap:2px;border-left:1px solid var(--bdr);padding-left:8px">
+        <button class="sp-tbtn${_spChartType==='candles'?' active':''}" data-t="candles" onclick="spSetType('candles')">Candles</button>
+        <button class="sp-tbtn${_spChartType==='line'?' active':''}" data-t="line" onclick="spSetType('line')">Line</button>
+      </div>
     </div>
     <div id="spChartWrap" class="sp-chart-wrap">
       <div style="display:flex;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--muted);font-size:12px"><div style="width:16px;height:16px;border:2px solid var(--bdr);border-top-color:var(--green);border-radius:50%;animation:spin 0.7s linear infinite"></div>Loading chart…</div>
