@@ -1459,18 +1459,20 @@ const COL = {
              "Security","SCRIP","Name","Equity","Share"],
   qty:      ["Quantity","quantity","qty","Qty","Shares","shares","QUANTITY","Holdings",
              "Net Quantity","Qty.","net qty","Balance","Bal","Units","Holding Qty"],
-  avgPrice: ["Avg. Cost Price","Average Price","avg_price","Avg Price","Buy Price",
-             "Purchase Price","Average Cost","Avg Cost","avgprice","Cost Price",
-             "average buy price","avg cost price","Average Buy Price","Avg. Price",
-             "Net Rate","Net Avg","Avg Rate","Average Rate","Cost Basis","Avg Buyprice",
-             "Average Cost Price","Avg cost","Average price"],
+  avgPrice: ["Avg. cost","Avg. Cost","Avg. Cost Price","Average Price","avg_price",
+             "Avg Price","Buy Price","Purchase Price","Average Cost","Avg Cost",
+             "avgprice","Cost Price","average buy price","avg cost price",
+             "Average Buy Price","Avg. Price","Net Rate","Net Avg","Avg Rate",
+             "Average Rate","Cost Basis","Avg Buyprice","Average Cost Price",
+             "Avg cost","Average price","Avg. Buyprice"],
   cmp:      ["LTP","ltp","Last Price","CMP","Current Price","Market Price","Close Price",
              "closing price","market price","last traded price","Current Value per share",
              "Last Traded Price","Closing Price","NSE Price","BSE Price","Rate"],
 };
 
 function findCol(headers, aliases) {
-  return headers.findIndex(h => aliases.some(a => h.trim().toLowerCase().includes(a.toLowerCase())));
+  const clean = s => s.trim().toLowerCase().replace(/\./g, "").replace(/\s+/g, " ").trim();
+  return headers.findIndex(h => aliases.some(a => clean(h).includes(clean(a))));
 }
 
 // Normalise a key for fuzzy comparison — strips dots, spaces, underscores, lowercases
