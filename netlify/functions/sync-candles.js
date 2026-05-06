@@ -24,6 +24,14 @@ exports.handler = async (event) => {
     if (!access_token)
       throw new Error("No Kite access token found in settings. Log in via Kite first.");
 
+    // Debug: confirm which key+token are being used (first 6 chars only)
+    const debugInfo = {
+      api_key_prefix:   KITE_API_KEY.slice(0, 6),
+      token_prefix:     access_token.slice(0, 6),
+      token_length:     access_token.length
+    };
+    console.log("Kite auth debug:", JSON.stringify(debugInfo));
+
     // 2 — Load all EQ instruments from Supabase (paginated, Supabase default page = 1000)
     const instruments = await fetchAllInstruments(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     if (!instruments.length)
@@ -81,7 +89,10 @@ exports.handler = async (event) => {
       body: JSON.stringify({ ok: true, date: today, synced: candles.length, instruments: instruments.length })
     };
   } catch (e) {
-    return { statusCode: 200, headers: H, body: JSON.stringify({ ok: false, error: e.message }) };
+    return { statusCode: 200, headers: H, body: JSON.stringify({
+      ok: false, error: e.message,
+      api_key_prefix: KITE_API_KEY?.slice(0, 6) ?? "missing"
+    }) };
   }
 };
 
@@ -112,7 +123,10 @@ async function fetchQuotes(instruments, apiKey, accessToken) {
     },
     signal: AbortSignal.timeout(15000)
   });
-  if (!res.ok) throw new Error(`Kite /quote returned HTTP ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Kite /quote HTTP ${res.status}: ${body.slice(0, 300)}`);
+  }
   const json = await res.json();
   if (json.status !== "success") throw new Error(`Kite /quote error: ${json.message}`);
   return json.data;
