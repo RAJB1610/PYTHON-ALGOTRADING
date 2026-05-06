@@ -240,21 +240,27 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
 
 <main>
   <div class="tab-bar">
-    <button class="tab active" onclick="switchTab('tech',this)">📊 Technical Signals<br><span style="font-size:9px;font-weight:400;color:var(--muted)">50 NSE F&O stocks · RSI · BB · MACD · Volume · MA</span></button>
+    <button class="tab active" onclick="switchTab('tech',this)">📊 Technical Signals<br><span style="font-size:9px;font-weight:400;color:var(--muted)">8,000+ NSE · BSE stocks · RSI · BB · MACD · Volume · MA</span></button>
     <button class="tab" onclick="switchTab('fund',this)">📋 Fundamentals<br><span style="font-size:9px;font-weight:400;color:var(--muted)">13 stocks · PE · ROE · D/E · Promoter · Growth</span></button>
     <button class="tab" onclick="switchTab('port',this)">💼 My Portfolio<br><span style="font-size:9px;font-weight:400;color:var(--muted)">Upload · Analyse · AI Insights</span></button>
   </div>
 
   <!-- ═══ TECHNICAL TAB ════════════════════════════════════════════════════ -->
   <div id="tab-tech">
-    <!-- Preset filters -->
+    <!-- Exchange + Preset filters -->
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">Exchange:</span>
+      <button class="btn" id="exchALL" style="font-size:11px;padding:3px 12px;background:var(--txt);color:#fff;border-color:var(--txt)" onclick="setExch('ALL',this)">All</button>
+      <button class="btn" id="exchNSE" style="font-size:11px;padding:3px 12px" onclick="setExch('NSE',this)">NSE</button>
+      <button class="btn" id="exchBSE" style="font-size:11px;padding:3px 12px" onclick="setExch('BSE',this)">BSE</button>
+    </div>
     <div class="preset-bar">
       <button class="preset active"  data-filter="all"       onclick="setPreset(this)">All Stocks</button>
       <button class="preset p-green" data-filter="uptrend"   onclick="setPreset(this)">▲ Strong Uptrend</button>
       <button class="preset p-green" data-filter="oversold"  onclick="setPreset(this)">⬇ Oversold Bounce</button>
       <button class="preset p-blue"  data-filter="breakout"  onclick="setPreset(this)">🚀 Breakout</button>
       <button class="preset p-amber" data-filter="volsurge"  onclick="setPreset(this)">⚡ Volume Surge</button>
-      <button class="preset p-green" data-filter="macdcross" onclick="setPreset(this)">✂ MACD Bullish Cross</button>
+      <button class="preset p-green" data-filter="macdcross" onclick="setPreset(this)">✂ MACD Bullish</button>
       <button class="preset p-purple"data-filter="nr7"       onclick="setPreset(this)">⬛ NR7 Squeeze</button>
       <span class="result-ct" id="techCt"></span>
     </div>
@@ -280,7 +286,6 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
           <th onclick="techSort('macd')" title="MACD(12,26,9) — above signal line = bullish momentum">MACD ↕</th>
           <th onclick="techSort('vol')"  title="Today's volume vs 10-day average">Vol Ratio ↕</th>
           <th onclick="techSort('ma')"   title="Price vs 50MA vs 200MA — uptrend = price > 50MA > 200MA">MA Trend</th>
-          <th onclick="techSort('pos52')"title="52-week range position — >95% = new high breakout">52W Pos ↕</th>
           <th onclick="techSort('bull')" title="Count of bullish signals out of 5">🟢 Signals ↕</th>
           <th>Verdict</th>
         </tr></thead>
@@ -642,7 +647,9 @@ const FUND_STOCKS = [
 // ════════════════════════════════════════════════════════════════════════════
 // STATE
 // ════════════════════════════════════════════════════════════════════════════
-const liveData   = {};         // keyed by sym
+const liveData   = {};         // keyed by sym (used by portfolio/fundamentals)
+let   techStocks = [];         // from screen-stocks API
+let   techExch   = "ALL";
 let   techPreset = "all";
 let   fundFilter = "all";
 let   techSortC  = "bull";
@@ -678,31 +685,73 @@ async function fetchOne(yf, sym) {
   } catch(e) { console.warn(sym, e.message); }
 }
 
+// Normalize a signals-table row to the format renderTech() expects
+function normalizeSig(s) {
+  const vr = s.vol_ratio;
+  const vol = s.volume || null;
+  return {
+    ok: true,
+    cmp:          s.close,
+    chg1d:        s.change_1d,
+    chg1m:        null,
+    rsi:          s.rsi,
+    bb:           s.bb_position != null ? { position: s.bb_position, upper: s.bb_upper, lower: s.bb_lower, isSqueeze: s.bb_squeeze } : null,
+    macd:         s.macd_hist  != null ? { value: s.macd_value, signal: s.macd_signal, hist: s.macd_hist, aboveSignal: s.macd_bullish, bullishCross: false } : null,
+    volRatio:     vr,
+    volume:       vol,
+    avgVol10:     (vol && vr) ? Math.round(vol / vr) : null,
+    maTrend:      s.ma_trend,
+    ma50:         s.ma50,
+    ma200:        s.ma200,
+    isNR7:        s.is_nr7,
+    bullCount:    s.bull_count,
+    pos52:        null,
+    newHigh:      false,
+    sigRSI:       s.rsi != null && s.rsi < 35,
+    sigBB:        s.bb_position != null && s.bb_position < 25,
+    sigMACD:      s.macd_bullish === true,
+    sigVol:       vr != null && vr >= 1.5,
+    sigMA:        s.ma_trend === "uptrend"
+  };
+}
+
 async function startScan() {
   const btn = document.getElementById("scanBtn");
   btn.disabled = true;
-  btn.textContent = "⟳ Scanning…";
+  btn.textContent = "⟳ Loading…";
   updatePill();
 
-  // Determine which stocks to scan based on active tab
-  const list = activeTab === "tech"
-    ? UNIVERSE
-    : FUND_STOCKS.map(s => ({ sym: s.sym, yf: s.yf }));
-
-  scanDone = 0;
-  scanTotal = list.length;
-  showProgress(true);
-
-  for (const s of list) {
-    await fetchOne(s.yf, s.sym);
-    scanDone++;
-    updateProgress(scanDone, scanTotal, s.sym);
-    if (activeTab === "tech") renderTech();
-    else                      renderFund();
-    await sleep(380); // rate-limit friendly
+  if (activeTab === "tech") {
+    showProgress(true);
+    document.getElementById("progressFill").style.width = "30%";
+    document.getElementById("progressTxt").textContent = "Fetching signals…";
+    try {
+      const exParam = techExch !== "ALL" ? `&exchange=${techExch}` : "";
+      const r    = await fetch(`/.netlify/functions/screen-stocks?limit=500${exParam}`);
+      const data = await r.json();
+      document.getElementById("progressFill").style.width = "100%";
+      techStocks = data.ok ? data.stocks : [];
+      if (!data.ok) console.error("screen-stocks:", data.error);
+    } catch(e) {
+      console.error("screen-stocks fetch:", e);
+      techStocks = [];
+    }
+    showProgress(false);
+    renderTech();
+  } else {
+    const list = FUND_STOCKS.map(s => ({ sym: s.sym, yf: s.yf }));
+    scanDone = 0; scanTotal = list.length;
+    showProgress(true);
+    for (const s of list) {
+      await fetchOne(s.yf, s.sym);
+      scanDone++;
+      updateProgress(scanDone, scanTotal, s.sym);
+      renderFund();
+      await sleep(380);
+    }
+    showProgress(false);
   }
 
-  showProgress(false);
   document.getElementById("lastTs").textContent =
     "Updated " + new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
   btn.disabled = false;
@@ -732,18 +781,17 @@ function techVerdict(bull, data) {
 function presetMatch(d, preset) {
   if (!d || !d.ok) return preset === "all";
   if (preset === "all")      return true;
-  if (preset === "uptrend")  return d.maTrend === "uptrend" && d.sigMACD && d.rsi >= 40 && d.rsi <= 65;
-  if (preset === "oversold") return d.rsi < 40 && d.bb.position < 35;
-  if (preset === "breakout") return d.pos52 > 80 && d.maTrend === "uptrend";
+  if (preset === "uptrend")  return d.maTrend === "uptrend" && d.macd?.aboveSignal && d.rsi >= 40 && d.rsi <= 65;
+  if (preset === "oversold") return d.rsi != null && d.rsi < 40 && d.bb?.position < 35;
+  if (preset === "breakout") return d.maTrend === "uptrend" && d.volRatio >= 1.5 && d.bullCount >= 3;
   if (preset === "volsurge") return d.volRatio >= 2;
-  if (preset === "macdcross")return d.macd?.bullishCross === true;
+  if (preset === "macdcross")return d.macd?.aboveSignal === true;
   if (preset === "nr7")      return d.isNR7 === true;
   return true;
 }
 
 function renderTech() {
-  const th = {};  // not used in tech tab
-  const rows = UNIVERSE.map(s => ({ ...s, d: liveData[s.sym] || null }));
+  const rows = techStocks.map(s => ({ sym: s.tradingsymbol, sec: s.exchange, d: normalizeSig(s) }));
 
   // Filter
   const filtered = rows.filter(r => presetMatch(r.d, techPreset));
@@ -768,12 +816,11 @@ function renderTech() {
     return (v(ad, techSortC) - v(bd, techSortC)) * techSortD;
   });
 
-  document.getElementById("techCt").textContent = `${filtered.length} of ${UNIVERSE.length} stocks`;
+  document.getElementById("techCt").textContent = `${filtered.length} of ${rows.length} stocks`;
 
   // Summary counts
-  let sb=0, b=0, n=0, av=0, loading=0;
+  let sb=0, b=0, n=0, av=0;
   rows.forEach(r => {
-    if (!r.d) { loading++; return; }
     const bull = r.d.bullCount ?? 0;
     if (bull >= 4) sb++;
     else if (bull === 3) b++;
@@ -785,8 +832,7 @@ function renderTech() {
     <div class="sum-card"><div class="sum-n" style="color:var(--blue)">${b}</div><div class="sum-l">Buy</div></div>
     <div class="sum-card"><div class="sum-n">${n}</div><div class="sum-l">Neutral</div></div>
     <div class="sum-card"><div class="sum-n" style="color:var(--muted)">${av}</div><div class="sum-l">Avoid</div></div>
-    <div class="sum-card"><div class="sum-n" style="color:var(--muted)">${loading}</div><div class="sum-l">Loading</div></div>
-    <div class="sum-card"><div class="sum-n">${UNIVERSE.length}</div><div class="sum-l">Total</div></div>`;
+    <div class="sum-card"><div class="sum-n">${rows.length}</div><div class="sum-l">Loaded</div></div>`;
 
   const tbody = document.getElementById("techBody");
   tbody.innerHTML = "";
@@ -874,7 +920,6 @@ function renderTech() {
       <td>${macdSig(d?.macd)}</td>
       <td>${volSig(d?.volRatio)}</td>
       <td>${maSig(d?.maTrend)}</td>
-      <td>${pos52Sig(d?.pos52, d?.newHigh)}</td>
       <td>${bullPips(bull)}</td>
       <td>
         <span class="badge ${v.cls}">${v.label}</span>
@@ -887,7 +932,7 @@ function renderTech() {
     expTr.id = "t" + sym;
     expTr.className = "exp-row";
     if (d && d.ok) {
-      expTr.innerHTML = `<td colspan="11"><div class="exp-inner">
+      expTr.innerHTML = `<td colspan="10"><div class="exp-inner">
         <div class="exp-grid">
           <div class="exp-box"><div class="e-l">RSI (14)</div><div class="e-v" style="color:${d.rsi<35?"var(--green)":d.rsi>70?"var(--red)":"var(--muted)"}">${d.rsi}</div>
             <div class="e-n">${d.rsi<35?"Oversold — bounce watch":d.rsi>70?"Overbought — caution":"Neutral zone"}</div></div>
@@ -902,15 +947,12 @@ function renderTech() {
           <div class="exp-box"><div class="e-l">Moving Averages</div>
             <div class="e-v" style="font-size:11px;color:${d.maTrend==="uptrend"?"var(--green)":d.maTrend==="downtrend"?"var(--red)":"var(--amber)"}">${d.maTrend.toUpperCase()}</div>
             <div class="e-n">50MA ₹${d.ma50?.toFixed(0)} · 200MA ₹${d.ma200?.toFixed(0)}</div></div>
-          <div class="exp-box"><div class="e-l">52-Week Range</div>
-            <div class="e-v" style="color:${d.newHigh?"var(--green)":d.pos52<25?"var(--green)":d.pos52>85?"var(--amber)":"var(--muted)"}">${d.pos52}%${d.newHigh?" 🚀":""}</div>
-            <div class="e-n">₹${d.lo52?.toFixed(0)} – ₹${d.hi52?.toFixed(0)}</div></div>
           ${d.isNR7?`<div class="exp-box" style="border-color:var(--purple)"><div class="e-l" style="color:var(--purple)">NR7 Squeeze</div><div class="e-v" style="color:var(--purple)">Active</div><div class="e-n">Narrowest range in 7 sessions — breakout imminent</div></div>`:""}
         </div>
         <div class="exp-note"><strong>Signal summary:</strong> RSI ${d.sigRSI?"🟢":"⚪"} · BB ${d.sigBB?"🟢":"⚪"} · MACD ${d.sigMACD?"🟢":"⚪"} · Volume ${d.sigVol?"🟢":"⚪"} · MA ${d.sigMA?"🟢":"⚪"} · ${bull >= 4?"Strong bullish setup.":bull >= 3?"Bullish lean — confirm with price action.":bull >= 2?"Mixed signals — wait for clarity.":"Weak setup — avoid or wait."}</div>
       </div></td>`;
     } else {
-      expTr.innerHTML = `<td colspan="11"><div class="exp-inner"><div class="exp-note">Loading data for ${sym}…</div></div></td>`;
+      expTr.innerHTML = `<td colspan="10"><div class="exp-inner"><div class="exp-note">No data for ${sym}</div></div></td>`;
     }
     tbody.appendChild(expTr);
   });
@@ -2252,6 +2294,16 @@ function switchTab(tab, btn) {
   document.getElementById("tab-port").style.display = tab === "port" ? "" : "none";
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
   btn.classList.add("active");
+}
+
+function setExch(exch, btn) {
+  techExch = exch;
+  ["ALL","NSE","BSE"].forEach(e => {
+    const el = document.getElementById("exch" + e);
+    if (el) { el.style.background = ""; el.style.color = ""; el.style.borderColor = ""; }
+  });
+  btn.style.background = "var(--txt)"; btn.style.color = "#fff"; btn.style.borderColor = "var(--txt)";
+  startScan();
 }
 
 function setPreset(btn) {
