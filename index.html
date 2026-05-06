@@ -1342,7 +1342,7 @@ function renderWatchlist() {
     const v     = bull != null ? techVerdict(bull, true) : null;
     const tr    = document.createElement("tr");
     tr.style.cursor = "pointer";
-    tr.onclick = () => openStockPanel(w.sym, w.exchange, sig || null);
+    tr.onclick = () => openStockPanel(w.sym, w.exchange, sig ? normalizeSig(sig) : null);
     tr.innerHTML = `
       <td><div class="sym-name">${w.sym}</div><div class="sym-sec">${w.exchange} · Added ${w.addedAt}</div></td>
       <td>${price != null ? `<div class="cmp-val">₹${fmtCmp(price)}</div>` : `<span style="color:var(--dim)">—</span>`}</td>
