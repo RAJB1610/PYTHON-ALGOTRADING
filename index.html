@@ -2081,14 +2081,15 @@ function addManualStock() {
     existing.avgPrice = +((existing.qty*existing.avgPrice + qty*avg)/totalQty).toFixed(2);
     existing.qty = totalQty;
   } else {
-    portfolio.push({sym, qty, avgPrice:+avg.toFixed(2), cmp:null});
+    const yf = sym + "." + document.getElementById("mExch").value;
+    portfolio.push({sym, qty, avgPrice:+avg.toFixed(2), cmp:null, yf});
   }
   savePort();
   renderPortfolio();
   ["mSym","mQty","mAvg"].forEach(id => document.getElementById(id).value="");
   // Fetch live data for this stock
-  const yf = sym + "." + document.getElementById("mExch").value;
-  fetchOne(yf, sym).then(() => renderPortfolio());
+  const yf2 = portfolio.find(h => h.sym === sym)?.yf || sym + ".NS";
+  fetchOne(yf2, sym).then(() => renderPortfolio());
 }
 
 function removeHolding(sym) {
@@ -2108,12 +2109,23 @@ async function fetchPortfolioData() {
   const btn = document.getElementById("fetchPortBtn");
   btn.disabled = true; btn.textContent = "⟳ Fetching…";
   for (const h of portfolio) {
-    const suffix = h.sym.includes(".") ? "" : ".NS";
-    await fetchOne(h.sym + suffix, h.sym);
+    const yf = h.yf || h.sym + ".NS";
+    await fetchOne(yf, h.sym);
     renderPortfolio();
     await sleep(380);
   }
   btn.disabled = false; btn.textContent = "⟳ Refresh Prices";
+}
+
+// Silent background refresh — called on load and every 3 min during market hours
+async function refreshPortPrices() {
+  if (!portfolio.length) return;
+  for (const h of portfolio) {
+    const yf = h.yf || h.sym + ".NS";
+    await fetchOne(yf, h.sym);
+    await sleep(300);
+  }
+  renderPortfolio();
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -3334,13 +3346,14 @@ loadWatch();
 initSymList();
 renderTech();
 fundReScore();
-if (portfolio.length) renderPortfolio();
+if (portfolio.length) { renderPortfolio(); refreshPortPrices(); }
 renderWatchlist();
 checkKiteReturn();
 startScan();
 scheduleAuto();
 loadIndexCharts();
-setInterval(loadIndexCharts, 15 * 1000); // poll every 15s for live price tracking
+setInterval(loadIndexCharts, 15 * 1000);          // index charts: poll every 15s
+setInterval(() => { if (portfolio.length) refreshPortPrices(); }, 3 * 60 * 1000); // portfolio: poll every 3 min
 
 // ════════════════════════════════════════════════════════════════════════════
 // STOCK DETAIL PANEL
