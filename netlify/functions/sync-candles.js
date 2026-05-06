@@ -15,6 +15,10 @@ exports.handler = async (event) => {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !KITE_API_KEY)
     return { statusCode: 500, headers: H, body: JSON.stringify({ ok: false, error: "Missing env vars: SUPABASE_URL, SUPABASE_SERVICE_KEY, KITE_API_KEY" }) };
 
+  // Optional filters: ?exchange=NSE  ?limit=200
+  const exchange = event.queryStringParameters?.exchange?.toUpperCase() || null;
+  const hardLimit = parseInt(event.queryStringParameters?.limit || "0") || null;
+
   try {
     // 1 — Get stored Kite access token
     const tokenRes  = await sbFetch(SUPABASE_URL, SUPABASE_SERVICE_KEY,
@@ -24,18 +28,11 @@ exports.handler = async (event) => {
     if (!access_token)
       throw new Error("No Kite access token found in settings. Log in via Kite first.");
 
-    // Debug: confirm which key+token are being used (first 6 chars only)
-    const debugInfo = {
-      api_key_prefix:   KITE_API_KEY.slice(0, 6),
-      token_prefix:     access_token.slice(0, 6),
-      token_length:     access_token.length
-    };
-    console.log("Kite auth debug:", JSON.stringify(debugInfo));
-
-    // 2 — Load all EQ instruments from Supabase (paginated, Supabase default page = 1000)
-    const instruments = await fetchAllInstruments(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    // 2 — Load EQ instruments from Supabase (paginated)
+    let instruments = await fetchAllInstruments(SUPABASE_URL, SUPABASE_SERVICE_KEY, exchange);
     if (!instruments.length)
       throw new Error("Instruments table is empty. Run sync-instruments first.");
+    if (hardLimit) instruments = instruments.slice(0, hardLimit);
 
     // 3 — Batch instruments → Kite /quote API with limited concurrency
     const today   = toIST(new Date()).split("T")[0]; // YYYY-MM-DD in IST
@@ -86,7 +83,7 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers: H,
-      body: JSON.stringify({ ok: true, date: today, synced: candles.length, instruments: instruments.length })
+      body: JSON.stringify({ ok: true, date: today, synced: candles.length, instruments: instruments.length, exchange: exchange || "ALL" })
     };
   } catch (e) {
     return { statusCode: 200, headers: H, body: JSON.stringify({
@@ -98,13 +95,14 @@ exports.handler = async (event) => {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-async function fetchAllInstruments(url, key) {
+async function fetchAllInstruments(url, key, exchange) {
   const all  = [];
   const PAGE = 1000;
   let offset = 0;
+  const exchFilter = exchange ? `&exchange=eq.${exchange}` : "";
   while (true) {
     const res  = await sbFetch(url, key,
-      `/rest/v1/instruments?select=instrument_token,tradingsymbol,exchange&instrument_type=eq.EQ&limit=${PAGE}&offset=${offset}`);
+      `/rest/v1/instruments?select=instrument_token,tradingsymbol,exchange&instrument_type=eq.EQ${exchFilter}&limit=${PAGE}&offset=${offset}`);
     const data = await res.json();
     if (!Array.isArray(data) || !data.length) break;
     all.push(...data);
