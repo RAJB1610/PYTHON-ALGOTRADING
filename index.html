@@ -50,10 +50,42 @@ body { background: var(--bg); color: var(--txt); font-family: var(--font); min-h
 @keyframes flashUp  { 0%{background:rgba(29,158,117,.25)} 100%{background:transparent} }
 @keyframes flashDn  { 0%{background:rgba(226,75,74,.2)}   100%{background:transparent} }
 @keyframes toastIn  { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+@keyframes spin     { to{transform:rotate(360deg)} }
 
 /* ── Watchlist ───────────────────────────────────────────────────────────── */
 .wbtn { background:none;border:none;cursor:pointer;font-size:18px;padding:2px 4px;line-height:1;transition:color .12s,transform .12s; }
 .wbtn:hover { transform:scale(1.25); }
+
+/* ── Stock detail panel ──────────────────────────────────────────────────── */
+.sp-overlay { position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;opacity:0;transition:opacity .25s;pointer-events:none;backdrop-filter:blur(2px); }
+.sp-overlay.open { opacity:1;pointer-events:auto; }
+.sp-panel   { position:fixed;top:0;right:0;width:500px;max-width:100vw;height:100vh;background:var(--bg2);border-left:1px solid var(--bdr);z-index:201;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);box-shadow:-8px 0 40px rgba(0,0,0,.15); }
+.sp-panel.open { transform:translateX(0); }
+.sp-scroll  { flex:1;overflow-y:auto;overflow-x:hidden; }
+.sp-hdr     { padding:14px 16px 12px;display:flex;align-items:flex-start;gap:10px;border-bottom:1px solid var(--bdr);background:var(--bg3);position:sticky;top:0;z-index:2; }
+.sp-hdr-sym { font-size:20px;font-weight:800;letter-spacing:-.5px; }
+.sp-hdr-sub { font-size:10px;color:var(--muted);margin-top:3px;font-family:var(--mono); }
+.sp-hdr-price { font-size:20px;font-weight:800;font-family:var(--mono);letter-spacing:-1px;white-space:nowrap; }
+.sp-hdr-chg   { font-size:12px;font-weight:700;margin-top:3px;text-align:right; }
+.sp-close-btn { background:var(--bg4);border:1px solid var(--bdr);border-radius:6px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;color:var(--muted);transition:.12s;flex-shrink:0; }
+.sp-close-btn:hover { background:var(--red3);color:var(--red);border-color:var(--red2); }
+.sp-stats-row { display:flex;border-bottom:1px solid var(--bdr); }
+.sp-stat      { flex:1;padding:9px 10px;text-align:center;border-right:1px solid var(--bdr); }
+.sp-stat:last-child { border-right:none; }
+.sp-sl { font-size:9px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em; }
+.sp-sv { font-size:12px;font-weight:700;font-family:var(--mono);margin-top:2px; }
+.sp-range-bar  { display:flex;gap:2px;padding:7px 10px;border-bottom:1px solid var(--bdr);background:var(--bg3); }
+.sp-rbtn       { font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;border:1px solid transparent;background:transparent;color:var(--muted);cursor:pointer;font-family:var(--font);transition:.1s; }
+.sp-rbtn:hover { background:var(--bg4);color:var(--txt); }
+.sp-rbtn.active{ background:var(--bg2);color:var(--txt);border-color:var(--bdr2);box-shadow:0 1px 3px rgba(0,0,0,.07); }
+.sp-chart-wrap { height:310px;border-bottom:1px solid var(--bdr); }
+.sp-signals    { padding:14px 16px 20px; }
+.sp-sig-title  { font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px; }
+.sp-sig-grid   { display:grid;grid-template-columns:1fr 1fr;gap:8px; }
+.sp-sig-box    { background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--r2);padding:10px 12px; }
+.sp-sig-label  { font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em; }
+.sp-sig-val    { font-size:18px;font-weight:800;font-family:var(--mono);margin:4px 0 3px;line-height:1; }
+.sp-sig-note   { font-size:10px;color:var(--muted);line-height:1.4; }
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
 header {
@@ -1049,7 +1081,8 @@ function renderTech() {
     }
 
     const tr = document.createElement("tr");
-    tr.onclick = () => toggleExp("t" + sym);
+    tr.style.cursor = "pointer";
+    tr.onclick = () => openStockPanel(sym, sec, d);
     tr.innerHTML = `
       <td><div class="sym-name">${sym}</div><div class="sym-sec">${sec}</div></td>
       <td>
@@ -1076,37 +1109,6 @@ function renderTech() {
         >${inWatch(sym,sec) ? "★" : "☆"}</button>
       </td>`;
     tbody.appendChild(tr);
-
-    // Expand row
-    const expTr = document.createElement("tr");
-    expTr.id = "t" + sym;
-    expTr.className = "exp-row";
-    if (d && d.ok) {
-      expTr.innerHTML = `<td colspan="11"><div class="exp-inner">
-        <div class="exp-grid">
-          <div class="exp-box"><div class="e-l">RSI (14)</div>
-            <div class="e-v" style="color:${d.rsi==null?"var(--muted)":d.rsi<35?"var(--green)":d.rsi>70?"var(--red)":"var(--muted)"}">${d.rsi ?? "—"}</div>
-            <div class="e-n">${d.rsi==null?"—":d.rsi<35?"Oversold — bounce watch":d.rsi>70?"Overbought — caution":"Neutral zone"}</div></div>
-          ${d.bb ? `<div class="exp-box"><div class="e-l">Bollinger Bands</div>
-            <div class="rng-bar"><div class="rng-fill"></div><div class="rng-dot" style="left:${Math.min(Math.max(d.bb.position,3),97)}%"></div></div>
-            <div class="e-n">Pos: ${d.bb.position.toFixed(0)}% · Upper ₹${d.bb.upper} · Lower ₹${d.bb.lower}${d.bb.isSqueeze?" · ⚡ SQUEEZE":""}</div></div>` : ""}
-          ${d.macd ? `<div class="exp-box"><div class="e-l">MACD (12,26,9)</div>
-            <div class="e-v" style="font-size:12px;color:${d.macd.aboveSignal?"var(--green)":"var(--red)"}">${d.macd.aboveSignal?"Above signal":"Below signal"}</div>
-            <div class="e-n">MACD ${d.macd.value} · Sig ${d.macd.signal} · Hist ${d.macd.hist}</div></div>` : ""}
-          <div class="exp-box"><div class="e-l">Volume</div>
-            <div class="e-v" style="color:${(d.volRatio??0)>=2?"var(--green)":(d.volRatio??0)>=1.5?"var(--amber)":"var(--muted)"}">${d.volRatio != null ? d.volRatio+"x avg" : "—"}</div>
-            <div class="e-n">Today: ${fmtVol(d.volume)} · 10d avg: ${fmtVol(d.avgVol10)}</div></div>
-          ${d.maTrend ? `<div class="exp-box"><div class="e-l">Moving Averages</div>
-            <div class="e-v" style="font-size:11px;color:${d.maTrend==="uptrend"?"var(--green)":d.maTrend==="downtrend"?"var(--red)":"var(--amber)"}">${d.maTrend.toUpperCase()}</div>
-            <div class="e-n">50MA ₹${d.ma50?.toFixed(0) ?? "—"} · 200MA ₹${d.ma200?.toFixed(0) ?? "—"}</div></div>` : ""}
-          ${d.isNR7?`<div class="exp-box" style="border-color:var(--purple)"><div class="e-l" style="color:var(--purple)">NR7 Squeeze</div><div class="e-v" style="color:var(--purple)">Active</div><div class="e-n">Narrowest range in 7 sessions — breakout imminent</div></div>`:""}
-        </div>
-        <div class="exp-note"><strong>Signal summary:</strong> RSI ${d.sigRSI?"🟢":"⚪"} · BB ${d.sigBB?"🟢":"⚪"} · MACD ${d.sigMACD?"🟢":"⚪"} · Volume ${d.sigVol?"🟢":"⚪"} · MA ${d.sigMA?"🟢":"⚪"} · ${bull >= 4?"Strong bullish setup.":bull >= 3?"Bullish lean — confirm with price action.":bull >= 2?"Mixed signals — wait for clarity.":"Weak setup — avoid or wait."}</div>
-      </div></td>`;
-    } else {
-      expTr.innerHTML = `<td colspan="11"><div class="exp-inner"><div class="exp-note">No data for ${sym}</div></div></td>`;
-    }
-    tbody.appendChild(expTr);
   });
 }
 
@@ -3328,6 +3330,226 @@ loadIndexCharts();
 setInterval(loadIndexCharts, 15 * 1000); // poll every 15s for live price tracking
 
 // ════════════════════════════════════════════════════════════════════════════
+// STOCK DETAIL PANEL
+// ════════════════════════════════════════════════════════════════════════════
+const SP_RANGES = [
+  { label:"1D",  range:"1d",  interval:"5m"  },
+  { label:"1W",  range:"5d",  interval:"15m" },
+  { label:"1M",  range:"1mo", interval:"1d"  },
+  { label:"3M",  range:"3mo", interval:"1d"  },
+  { label:"6M",  range:"6mo", interval:"1d"  },
+  { label:"1Y",  range:"1y",  interval:"1d"  },
+  { label:"Max", range:"max", interval:"1mo" },
+];
+let _spChart      = null;
+let _spSym        = null;
+let _spExch       = null;
+let _spD          = null;
+let _spRange      = "3M";
+
+function openStockPanel(sym, exch, d) {
+  _spSym = sym; _spExch = exch; _spD = d; _spRange = "3M";
+  document.getElementById("spOverlay").classList.add("open");
+  document.getElementById("stockPanel").classList.add("open");
+  document.body.style.overflow = "hidden";
+  _spRenderStatic(sym, exch, d);
+  _spLoadChart(sym, exch, "3mo", "1d");
+}
+
+function closeStockPanel() {
+  document.getElementById("spOverlay").classList.remove("open");
+  document.getElementById("stockPanel").classList.remove("open");
+  document.body.style.overflow = "";
+  if (_spChart) { try { _spChart.remove(); } catch(_) {} _spChart = null; }
+}
+
+function spSetRange(label) {
+  _spRange = label;
+  document.querySelectorAll(".sp-rbtn").forEach(b => b.classList.toggle("active", b.textContent === label));
+  const cfg = SP_RANGES.find(r => r.label === label);
+  if (cfg && _spSym) _spLoadChart(_spSym, _spExch, cfg.range, cfg.interval);
+}
+
+async function _spLoadChart(sym, exch, range, interval) {
+  const wrap = document.getElementById("spChartWrap");
+  if (!wrap) return;
+  wrap.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--muted);font-size:12px"><div style="width:16px;height:16px;border:2px solid var(--bdr);border-top-color:var(--green);border-radius:50%;animation:spin 0.7s linear infinite"></div>Loading chart…</div>`;
+  if (_spChart) { try { _spChart.remove(); } catch(_) {} _spChart = null; }
+
+  try {
+    const res  = await fetch(`/.netlify/functions/stock-chart?symbol=${encodeURIComponent(sym)}&exchange=${encodeURIComponent(exch)}&range=${range}`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "No data");
+
+    if (data.meta) _spUpdateMeta(data.meta);
+
+    const intraday = ["1d","5d"].includes(range);
+    const series   = data.timestamps
+      .map((t, i) => ({
+        time:  intraday ? t : new Date(t * 1000).toISOString().slice(0, 10),
+        open:  data.ohlcv.open[i],
+        high:  data.ohlcv.high[i],
+        low:   data.ohlcv.low[i],
+        close: data.ohlcv.close[i],
+      }))
+      .filter(c => c.open != null && c.close != null && c.high != null && c.low != null)
+      .sort((a, b) => (a.time < b.time ? -1 : 1));
+
+    if (!series.length) throw new Error("No candles for this range");
+
+    wrap.innerHTML = "";
+    const chart = LightweightCharts.createChart(wrap, {
+      width:  wrap.offsetWidth,
+      height: 310,
+      layout: { background: { type:"solid", color:"transparent" }, textColor:"#8896B3", fontSize:11, fontFamily:"'JetBrains Mono', monospace" },
+      grid:   { vertLines:{ color:"#EBEEf6" }, horzLines:{ color:"#EBEEf6" } },
+      crosshair: {
+        mode: LightweightCharts.CrosshairMode.Normal,
+        vertLine: { color:"#94A3B8", width:1, style:1, labelBackgroundColor:"#374151" },
+        horzLine: { color:"#94A3B8", width:1, style:1, labelBackgroundColor:"#374151" },
+      },
+      rightPriceScale: { borderColor:"#D5DAF0", scaleMargins:{ top:0.08, bottom:0.08 } },
+      timeScale: { borderColor:"#D5DAF0", timeVisible: intraday, fixRightEdge:true },
+      handleScroll: true, handleScale: true,
+    });
+
+    const candles = chart.addCandlestickSeries({
+      upColor:"#1D9E75", downColor:"#E24B4A",
+      borderVisible:false,
+      wickUpColor:"#1D9E75", wickDownColor:"#E24B4A",
+    });
+    candles.setData(series);
+    chart.timeScale().fitContent();
+    _spChart = chart;
+
+    new ResizeObserver(() => { if (_spChart) _spChart.applyOptions({ width: wrap.offsetWidth }); }).observe(wrap);
+  } catch(e) {
+    wrap.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:12px">${e.message}</div>`;
+  }
+}
+
+function _spRenderStatic(sym, exch, d) {
+  const el = document.getElementById("spContent");
+  if (!el) return;
+  const fmt   = n => n != null ? "₹" + n.toLocaleString("en-IN", { maximumFractionDigits:2 }) : "—";
+  const chg   = d?.chg1d ?? null;
+  const clr   = chg == null ? "var(--muted)" : chg >= 0 ? "var(--green)" : "var(--red)";
+  const chgTx = chg != null ? `${chg>=0?"▲":"▼"} ${Math.abs(chg).toFixed(2)}%` : "—";
+  const isW   = inWatch(sym, exch);
+  const v     = d ? techVerdict(d.bullCount ?? 0, d) : null;
+
+  el.innerHTML = `
+    <div class="sp-hdr">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="sp-hdr-sym">${sym}</span>
+          <span class="badge b-n" style="font-size:9px">${exch}</span>
+          ${v ? `<span class="badge ${v.cls}">${v.label}</span>` : ""}
+          <button class="wbtn" data-k="${sym}|${exch}" onclick="event.stopPropagation();toggleWatch('${sym}','${exch}')" style="color:${isW?"#EF9F27":"var(--dim)"};font-size:20px" title="${isW?"Remove from watchlist":"Add to watchlist"}">${isW?"★":"☆"}</button>
+        </div>
+        <div class="sp-hdr-sub" id="spCompName">Loading…</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div class="sp-hdr-price">${d?.cmp != null ? fmt(d.cmp) : "—"}</div>
+        <div class="sp-hdr-chg" style="color:${clr}">${chgTx}</div>
+      </div>
+      <button class="sp-close-btn" onclick="closeStockPanel()">✕</button>
+    </div>
+
+    <div class="sp-stats-row">
+      <div class="sp-stat"><div class="sp-sl">52W High</div><div class="sp-sv" id="sp52H">—</div></div>
+      <div class="sp-stat"><div class="sp-sl">52W Low</div><div class="sp-sv" id="sp52L">—</div></div>
+      <div class="sp-stat"><div class="sp-sl">Mkt Cap</div><div class="sp-sv" id="spMCap">—</div></div>
+      <div class="sp-stat"><div class="sp-sl">Volume</div><div class="sp-sv" id="spVol2">—</div></div>
+    </div>
+
+    <div class="sp-range-bar">
+      ${SP_RANGES.map(r => `<button class="sp-rbtn${r.label===_spRange?" active":""}" onclick="spSetRange('${r.label}')">${r.label}</button>`).join("")}
+    </div>
+    <div id="spChartWrap" class="sp-chart-wrap">
+      <div style="display:flex;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--muted);font-size:12px"><div style="width:16px;height:16px;border:2px solid var(--bdr);border-top-color:var(--green);border-radius:50%;animation:spin 0.7s linear infinite"></div>Loading chart…</div>
+    </div>
+
+    ${d ? _spSignalsHTML(d) : ""}`;
+}
+
+function _spUpdateMeta(m) {
+  const fmt  = n => n != null ? "₹" + n.toLocaleString("en-IN", { maximumFractionDigits:2 }) : "—";
+  const fmtMc = n => {
+    if (n == null) return "—";
+    if (n >= 1e13) return "₹" + (n/1e13).toFixed(1) + "L Cr";
+    if (n >= 1e11) return "₹" + (n/1e11).toFixed(1) + "K Cr";
+    if (n >= 1e9)  return "₹" + (n/1e9).toFixed(0)  + " Cr";
+    return "—";
+  };
+  const fmtV = n => {
+    if (!n) return "—";
+    if (n >= 1e7) return (n/1e7).toFixed(2) + " Cr";
+    if (n >= 1e5) return (n/1e5).toFixed(1) + " L";
+    if (n >= 1e3) return (n/1e3).toFixed(0) + " K";
+    return n.toString();
+  };
+  const nm = document.getElementById("spCompName");
+  if (nm && m.shortName && m.shortName !== _spSym) nm.textContent = m.shortName;
+  else if (nm) nm.textContent = `${_spExch} · INR`;
+  _q("sp52H", fmt(m.fiftyTwoWeekHigh));
+  _q("sp52L", fmt(m.fiftyTwoWeekLow));
+  _q("spMCap", fmtMc(m.marketCap));
+  _q("spVol2", fmtV(m.regularMarketVolume));
+}
+function _q(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+
+function _spSignalsHTML(d) {
+  const fmt = n => n != null ? "₹" + n.toLocaleString("en-IN", { maximumFractionDigits:2 }) : "—";
+  const rsiClr  = d.rsi==null?"var(--muted)":d.rsi<35?"var(--green)":d.rsi>70?"var(--red)":"var(--muted)";
+  const rsiNote = d.rsi==null?"—":d.rsi<35?"Oversold — potential bounce zone":d.rsi>70?"Overbought — caution":"Neutral zone (35–70)";
+  const volClr  = (d.volRatio??0)>=2?"var(--green)":(d.volRatio??0)>=1.5?"var(--amber)":"var(--muted)";
+  const bullClr = (d.bullCount??0)>=4?"var(--green)":(d.bullCount??0)>=3?"var(--blue)":(d.bullCount??0)>=2?"var(--muted)":"var(--red)";
+  const bullNote= (d.bullCount??0)>=4?"Strong bullish setup":(d.bullCount??0)>=3?"Bullish lean — confirm with price":(d.bullCount??0)>=2?"Mixed signals — wait for clarity":"Weak setup — avoid for now";
+  return `
+    <div class="sp-signals">
+      <div class="sp-sig-title">Technical Analysis</div>
+      <div class="sp-sig-grid">
+        <div class="sp-sig-box">
+          <div class="sp-sig-label">RSI (14)</div>
+          <div class="sp-sig-val" style="color:${rsiClr}">${d.rsi ?? "—"}</div>
+          <div class="sp-sig-note">${rsiNote}</div>
+        </div>
+        <div class="sp-sig-box" style="border-color:${bullClr}">
+          <div class="sp-sig-label">Bull Score</div>
+          <div class="sp-sig-val" style="color:${bullClr}">${d.bullCount ?? 0}/5</div>
+          <div class="sp-sig-note">${bullNote}</div>
+        </div>
+        ${d.macd ? `<div class="sp-sig-box">
+          <div class="sp-sig-label">MACD (12,26,9)</div>
+          <div class="sp-sig-val" style="font-size:13px;color:${d.macd.aboveSignal?"var(--green)":"var(--red)"}">${d.macd.aboveSignal?"▲ Above Signal":"▼ Below Signal"}</div>
+          <div class="sp-sig-note">Hist ${d.macd.hist} · Val ${d.macd.value} · Sig ${d.macd.signal}</div>
+        </div>` : ""}
+        ${d.bb ? `<div class="sp-sig-box">
+          <div class="sp-sig-label">Bollinger Bands</div>
+          <div class="sp-sig-val" style="color:${d.bb.position<25?"var(--green)":d.bb.position>75?"var(--red)":"var(--muted)"}">${d.bb.position.toFixed(0)}%</div>
+          <div class="sp-sig-note">Upper ${fmt(d.bb.upper)} · Lower ${fmt(d.bb.lower)}${d.bb.isSqueeze?" · ⚡ Squeeze":""}</div>
+        </div>` : ""}
+        ${d.maTrend ? `<div class="sp-sig-box">
+          <div class="sp-sig-label">MA Trend</div>
+          <div class="sp-sig-val" style="font-size:14px;color:${d.maTrend==="uptrend"?"var(--green)":d.maTrend==="downtrend"?"var(--red)":"var(--amber)"}">${d.maTrend.toUpperCase()}</div>
+          <div class="sp-sig-note">50MA ${fmt(d.ma50)} · 200MA ${fmt(d.ma200)}</div>
+        </div>` : ""}
+        <div class="sp-sig-box">
+          <div class="sp-sig-label">Volume Ratio</div>
+          <div class="sp-sig-val" style="color:${volClr}">${d.volRatio != null ? d.volRatio+"x" : "—"}</div>
+          <div class="sp-sig-note">vs 10-day average${d.isNR7?" · ⚡ NR7 Squeeze":""}</div>
+        </div>
+        ${d.cmp && d.ma50 ? `<div class="sp-sig-box">
+          <div class="sp-sig-label">vs Moving Avgs</div>
+          <div class="sp-sig-val" style="font-size:13px;color:${d.cmp>d.ma50?"var(--green)":"var(--red)"}">${d.cmp > d.ma50 ? "▲ Above 50MA" : "▼ Below 50MA"}</div>
+          <div class="sp-sig-note">${d.ma200 ? (d.cmp > d.ma200 ? "▲ Above 200MA" : "▼ Below 200MA") : ""}</div>
+        </div>` : ""}
+      </div>
+    </div>`;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // INDEX CHARTS — Google Finance style via Lightweight Charts + Yahoo Finance
 // ════════════════════════════════════════════════════════════════════════════
 const _lcCharts      = {};   // { id: { chart, series, priceLine } }
@@ -3588,6 +3810,14 @@ setInterval(() => {
   }
 }, 1000);
 </script>
+<!-- Stock Detail Panel -->
+<div id="spOverlay" class="sp-overlay" onclick="closeStockPanel()"></div>
+<div id="stockPanel" class="sp-panel">
+  <div class="sp-scroll">
+    <div id="spContent"></div>
+  </div>
+</div>
+
 <div id="toastWrap" style="position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none"></div>
 </body>
 </html>
