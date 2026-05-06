@@ -26,23 +26,22 @@
 body { background: var(--bg); color: var(--txt); font-family: var(--font); min-height: 100vh; }
 
 /* ── Index cards ─────────────────────────────────────────────────────────── */
-.idx-card {
-  border-radius: var(--r);
-  overflow: hidden;
-  border: 1px solid var(--bdr);
-  background: var(--bg2);
-  box-shadow: 0 2px 8px rgba(0,0,0,.05);
-  position: relative;
-}
-.idx-top   { padding: 14px 16px 0; }
-.idx-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between; }
-.idx-price { font-size: 26px; font-weight: 800; font-family: var(--mono); letter-spacing: -1px; line-height: 1; }
-.idx-chg   { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 6px; }
-.idx-chg.up { background: var(--green3); color: var(--green); }
-.idx-chg.dn { background: var(--red3);   color: var(--red);   }
-.idx-chg.na { background: var(--bg3);    color: var(--muted); }
-.idx-meta  { font-size: 10px; color: var(--muted); font-family: var(--mono); margin: 4px 0 10px; display: flex; gap: 10px; flex-wrap: wrap; }
-.idx-chart-wrap { height: 170px; border-top: 1px solid var(--bdr); }
+.idx-card       { border-radius:var(--r); overflow:hidden; border:1px solid var(--bdr); background:var(--bg2); box-shadow:0 2px 8px rgba(0,0,0,.05); }
+.idx-header     { display:flex; justify-content:space-between; align-items:center; padding:14px 16px 6px; }
+.idx-name       { font-size:13px; font-weight:700; letter-spacing:-.2px; }
+.idx-exch       { font-size:10px; color:var(--muted); font-weight:600; margin-left:6px; }
+.idx-live-dot   { font-size:9px; font-weight:700; padding:2px 8px; border-radius:6px; }
+.idx-price-row  { padding:2px 16px 0; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+.idx-price      { font-size:28px; font-weight:800; font-family:var(--mono); letter-spacing:-1.5px; line-height:1.1; }
+.idx-chg-pct    { font-size:15px; font-weight:700; }
+.idx-chg-pts    { font-size:12px; font-family:var(--mono); }
+.idx-hl-row     { padding:4px 16px 6px; font-size:10px; color:var(--muted); font-family:var(--mono); display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+.idx-hl-time    { color:var(--dim); margin-left:auto; }
+.idx-rangebar   { padding:4px 12px 8px; display:flex; gap:3px; }
+.range-btn      { font-size:11px; font-weight:600; padding:3px 10px; border-radius:5px; border:1px solid transparent; background:transparent; color:var(--muted); cursor:pointer; font-family:var(--font); transition:.1s; }
+.range-btn:hover{ background:var(--bg3); color:var(--txt); }
+.range-btn.active{ background:var(--bg4); color:var(--txt); border-color:var(--bdr2); }
+.idx-chart-wrap { height:215px; border-top:1px solid var(--bdr); }
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
 header {
@@ -3172,127 +3171,223 @@ checkKiteReturn();
 startScan();
 scheduleAuto();
 loadIndexCharts();
-setInterval(loadIndexCharts, 5 * 60 * 1000); // refresh every 5 min
+setInterval(loadIndexCharts, 60 * 1000); // refresh every 60s for live price tracking
 
 // ════════════════════════════════════════════════════════════════════════════
-// INDEX CHARTS — Nifty 50 + Sensex via Yahoo Finance + Lightweight Charts
+// INDEX CHARTS — Google Finance style via Lightweight Charts + Yahoo Finance
 // ════════════════════════════════════════════════════════════════════════════
-const _lcCharts = {};
+const _lcCharts = {};   // { id: { chart, series, priceLine } }
+const _lcData   = {};   // { id: { dates[], closes[], price, prevClose, high, low } }
+const _lcRange  = {};   // { id: '1M' | '3M' }
+
+function _fmtINR(n) {
+  return n != null ? "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—";
+}
+
+function _rangeData(id, months) {
+  const d = _lcData[id];
+  if (!d) return [];
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - months);
+  const cutStr = cutoff.toISOString().slice(0, 10);
+  return d.dates
+    .map((dt, i) => ({ time: dt, value: d.closes[i] }))
+    .filter(p => p.value != null && p.time >= cutStr)
+    .sort((a, b) => (a.time < b.time ? -1 : 1));
+}
+
+function _statsHTML(d) {
+  const chg    = d.prevClose ? (d.price - d.prevClose) / d.prevClose * 100 : null;
+  const isUp   = chg == null ? null : chg >= 0;
+  const clr    = isUp == null ? "var(--muted)" : isUp ? "var(--green)" : "var(--red)";
+  const arrow  = isUp == null ? "" : isUp ? "▲ " : "▼ ";
+  const pct    = chg  != null ? `${arrow}${Math.abs(chg).toFixed(2)}%` : "—";
+  const pts    = d.prevClose != null ? `(${chg >= 0 ? "+" : ""}${(d.price - d.prevClose).toLocaleString("en-IN", { maximumFractionDigits: 2 })})` : "";
+  const now    = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
+  return { isUp, clr, pct, pts, now };
+}
 
 function renderIndexCard(id, name, exchange, d) {
   const el = document.getElementById(id);
   if (!el) return;
 
-  // Destroy old chart instance before re-rendering
-  if (_lcCharts[id]) { try { _lcCharts[id].remove(); } catch(_) {} delete _lcCharts[id]; }
+  if (_lcCharts[id]) {
+    try { _lcCharts[id].chart.remove(); } catch(_) {}
+    delete _lcCharts[id];
+  }
 
   if (!d || d.error) {
-    el.innerHTML = `<div class="idx-top"><div class="idx-label">${name} · ${exchange}</div><div style="font-size:12px;color:var(--muted);padding-bottom:14px">Data unavailable</div></div>`;
+    el.innerHTML = `<div class="idx-header"><div class="idx-name">${name}</div></div><div style="padding:12px 16px 16px;color:var(--muted);font-size:12px">Data unavailable</div>`;
     return;
   }
 
-  const chg    = d.prevClose ? (d.price - d.prevClose) / d.prevClose * 100 : null;
-  const isUp   = chg == null ? null : chg >= 0;
-  const chgStr = chg != null ? `${chg >= 0 ? "▲" : "▼"} ${Math.abs(chg).toFixed(2)}%` : "—";
-  const chgCls = chg == null ? "na" : chg >= 0 ? "up" : "dn";
-  const fmt    = n => n != null ? "₹" + n.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : "—";
-  const ptsDiff = d.prevClose ? (d.price - d.prevClose) : null;
-  const ptsStr  = ptsDiff != null ? `(${ptsDiff >= 0 ? "+" : ""}${ptsDiff.toLocaleString("en-IN", { maximumFractionDigits: 2 })})` : "";
-  const now    = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" });
+  _lcData[id]  = d;
+  _lcRange[id] = _lcRange[id] || "3M";
 
-  const lineColor = isUp === false ? "#E24B4A" : "#1D9E75";
-  const topColor  = isUp === false ? "rgba(226,75,74,0.25)"  : "rgba(29,158,117,0.25)";
-  const botColor  = isUp === false ? "rgba(226,75,74,0.02)"  : "rgba(29,158,117,0.02)";
-  const chartId   = `${id}_lc`;
+  const { isUp, clr, pct, pts, now } = _statsHTML(d);
+  const liveBg  = isUp == null ? "var(--bg3)"    : isUp ? "var(--green3)"  : "var(--red3)";
+  const liveClr = isUp == null ? "var(--muted)"  : isUp ? "var(--green)"   : "var(--red)";
+  const r       = _lcRange[id];
 
   el.innerHTML = `
-    <div class="idx-top">
-      <div class="idx-label">
-        <span>${name} <span style="opacity:.5">· ${exchange} · INR</span></span>
-        <span style="font-size:9px;background:${isUp===null?"var(--bg4)":isUp?"var(--green3)":"var(--red3)"};color:${isUp===null?"var(--muted)":isUp?"var(--green)":"var(--red)"};padding:2px 7px;border-radius:6px;font-weight:700">● LIVE</span>
-      </div>
-      <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:5px;flex-wrap:wrap">
-        <span class="idx-price">${fmt(d.price)}</span>
-        <span class="idx-chg ${chgCls}">${chgStr}</span>
-        <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">${ptsStr}</span>
-      </div>
-      <div class="idx-meta">
-        <span>H&nbsp;${fmt(d.high)}</span>
-        <span>L&nbsp;${fmt(d.low)}</span>
-        <span style="color:var(--dim)">${now} IST · 3-month daily</span>
-      </div>
+    <div class="idx-header">
+      <div><span class="idx-name">${name}</span><span class="idx-exch">${exchange} · INR</span></div>
+      <span class="idx-live-dot" style="background:${liveBg};color:${liveClr}">● LIVE</span>
     </div>
-    <div id="${chartId}" class="idx-chart-wrap"></div>`;
+    <div class="idx-price-row" id="${id}_stats">
+      <span class="idx-price">${_fmtINR(d.price)}</span>
+      <span class="idx-chg-pct" style="color:${clr}">${pct}</span>
+      <span class="idx-chg-pts" style="color:${clr}">${pts}</span>
+    </div>
+    <div class="idx-hl-row" id="${id}_hl">
+      <span>H&nbsp;${_fmtINR(d.high)}</span><span>L&nbsp;${_fmtINR(d.low)}</span>
+      <span class="idx-hl-time">${now} IST</span>
+    </div>
+    <div class="idx-rangebar">
+      <button class="range-btn${r==="1M"?" active":""}" onclick="setIdxRange('${id}','1M')">1M</button>
+      <button class="range-btn${r==="3M"?" active":""}" onclick="setIdxRange('${id}','3M')">3M</button>
+    </div>
+    <div id="${id}_lc" class="idx-chart-wrap"></div>`;
 
-  // Build series data — filter nulls, ensure ascending time order
-  const seriesData = d.dates
-    .map((dt, i) => ({ time: dt, value: d.closes[i] }))
-    .filter(p => p.value != null)
-    .sort((a, b) => a.time < b.time ? -1 : 1);
+  requestAnimationFrame(() => _initChart(id));
+}
 
-  if (!seriesData.length) return;
+function _initChart(id) {
+  const container = document.getElementById(`${id}_lc`);
+  if (!container || !_lcData[id]) return;
 
-  const container = document.getElementById(chartId);
+  const months = _lcRange[id] === "1M" ? 1 : 3;
+  const data   = _rangeData(id, months);
+  if (data.length < 2) return;
+
+  const base    = data[0].value;
+  const last    = data[data.length - 1].value;
+
   const chart = LightweightCharts.createChart(container, {
     width:  container.offsetWidth,
-    height: 170,
+    height: 215,
     layout: {
       background: { type: "solid", color: "transparent" },
-      textColor:  "#6272A0",
+      textColor:  "#8896B3",
       fontSize:   11,
       fontFamily: "'JetBrains Mono', monospace",
     },
     grid: {
-      vertLines: { color: "#E2E6F3" },
-      horzLines: { color: "#E2E6F3" },
+      vertLines: { color: "#EBEEf6" },
+      horzLines: { color: "#EBEEf6" },
     },
     crosshair: {
       mode: LightweightCharts.CrosshairMode.Normal,
-      vertLine: { color: "#6272A0", width: 1, style: 1, labelBackgroundColor: "#6272A0" },
-      horzLine: { color: "#6272A0", width: 1, style: 1, labelBackgroundColor: "#6272A0" },
+      vertLine: { color: "#94A3B8", width: 1, style: 1, labelBackgroundColor: "#374151" },
+      horzLine: { color: "#94A3B8", width: 1, style: 1, labelBackgroundColor: "#374151" },
     },
     rightPriceScale: {
-      borderColor: "#D5DAF0",
-      scaleMargins: { top: 0.08, bottom: 0.06 },
+      borderColor:   "#D5DAF0",
+      scaleMargins:  { top: 0.12, bottom: 0.08 },
     },
     timeScale: {
-      borderColor: "#D5DAF0",
-      timeVisible: false,
+      borderColor:  "#D5DAF0",
+      timeVisible:  false,
+      fixLeftEdge:  true,
+      fixRightEdge: true,
     },
-    handleScroll:  { mouseWheel: true, pressedMouseMove: true },
-    handleScale:   { mouseWheel: true, pinch: true },
+    handleScroll: true,
+    handleScale:  true,
   });
 
-  const area = chart.addAreaSeries({
-    lineColor,
-    topColor,
-    bottomColor: botColor,
+  const series = chart.addBaselineSeries({
+    baseValue:       { type: "price", price: base },
+    topLineColor:    "#1D9E75",
+    topFillColor1:   "rgba(29,158,117,0.22)",
+    topFillColor2:   "rgba(29,158,117,0.02)",
+    bottomLineColor: "#E24B4A",
+    bottomFillColor1:"rgba(226,75,74,0.02)",
+    bottomFillColor2:"rgba(226,75,74,0.22)",
     lineWidth: 2,
     priceFormat: { type: "price", precision: 2, minMove: 0.01 },
   });
 
-  area.setData(seriesData);
+  series.setData(data);
+
+  const priceLine = series.createPriceLine({
+    price:             last,
+    color:             last >= base ? "#1D9E75" : "#E24B4A",
+    lineWidth:         1,
+    lineStyle:         LightweightCharts.LineStyle.Dashed,
+    axisLabelVisible:  true,
+    title:             "",
+  });
+
   chart.timeScale().fitContent();
-  _lcCharts[id] = chart;
+  _lcCharts[id] = { chart, series, priceLine };
 }
 
-// Resize charts when window resizes
-window.addEventListener("resize", () => {
-  for (const [id, chart] of Object.entries(_lcCharts)) {
-    const wrap = document.getElementById(`${id}_lc`);
-    if (wrap) chart.applyOptions({ width: wrap.offsetWidth });
+function setIdxRange(id, range) {
+  _lcRange[id] = range;
+  document.querySelectorAll(`#${id} .range-btn`).forEach(btn => {
+    btn.classList.toggle("active", btn.textContent === range);
+  });
+  if (!_lcCharts[id]) return;
+  const months = range === "1M" ? 1 : 3;
+  const data   = _rangeData(id, months);
+  if (data.length < 2) return;
+  const base = data[0].value;
+  const last = data[data.length - 1].value;
+  const { series, chart } = _lcCharts[id];
+  series.applyOptions({ baseValue: { type: "price", price: base } });
+  series.setData(data);
+  chart.timeScale().fitContent();
+}
+
+function _updateStats(id, d) {
+  const statsEl = document.getElementById(`${id}_stats`);
+  const hlEl    = document.getElementById(`${id}_hl`);
+  if (!statsEl) return;
+
+  _lcData[id] = { ..._lcData[id], ...d };
+
+  const { isUp, clr, pct, pts, now } = _statsHTML(d);
+  statsEl.innerHTML = `
+    <span class="idx-price">${_fmtINR(d.price)}</span>
+    <span class="idx-chg-pct" style="color:${clr}">${pct}</span>
+    <span class="idx-chg-pts" style="color:${clr}">${pts}</span>`;
+
+  if (hlEl) hlEl.innerHTML = `
+    <span>H&nbsp;${_fmtINR(d.high)}</span><span>L&nbsp;${_fmtINR(d.low)}</span>
+    <span class="idx-hl-time">${now} IST</span>`;
+
+  // Update live dot colour
+  const dot = document.querySelector(`#${id} .idx-live-dot`);
+  if (dot) {
+    dot.style.background = isUp == null ? "var(--bg3)"   : isUp ? "var(--green3)"  : "var(--red3)";
+    dot.style.color      = isUp == null ? "var(--muted)" : isUp ? "var(--green)"   : "var(--red)";
   }
-});
+
+  // Push updated last point to the chart
+  if (_lcCharts[id]) {
+    const today = new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+    try { _lcCharts[id].series.update({ time: today, value: d.price }); } catch(_) {}
+  }
+}
 
 async function loadIndexCharts() {
   try {
     const res  = await fetch("/.netlify/functions/index-data");
     const data = await res.json();
     if (!data.ok) return;
-    renderIndexCard("idx_nifty",  "Nifty 50", "NSE", data.nifty);
-    renderIndexCard("idx_sensex", "Sensex",   "BSE", data.sensex);
+    if (!_lcCharts["idx_nifty"])  renderIndexCard("idx_nifty",  "NIFTY 50", "NSE", data.nifty);
+    else                          _updateStats("idx_nifty",  data.nifty);
+    if (!_lcCharts["idx_sensex"]) renderIndexCard("idx_sensex", "SENSEX",   "BSE", data.sensex);
+    else                          _updateStats("idx_sensex", data.sensex);
   } catch(e) { console.warn("index-data:", e.message); }
 }
+
+window.addEventListener("resize", () => {
+  for (const [id, lc] of Object.entries(_lcCharts)) {
+    const wrap = document.getElementById(`${id}_lc`);
+    if (wrap) lc.chart.applyOptions({ width: wrap.offsetWidth });
+  }
+});
 </script>
 </body>
 </html>
