@@ -49,6 +49,11 @@ body { background: var(--bg); color: var(--txt); font-family: var(--font); min-h
 @keyframes livePing { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.35;transform:scale(.7)} }
 @keyframes flashUp  { 0%{background:rgba(29,158,117,.25)} 100%{background:transparent} }
 @keyframes flashDn  { 0%{background:rgba(226,75,74,.2)}   100%{background:transparent} }
+@keyframes toastIn  { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+
+/* ── Watchlist ───────────────────────────────────────────────────────────── */
+.wbtn { background:none;border:none;cursor:pointer;font-size:18px;padding:2px 4px;line-height:1;transition:color .12s,transform .12s; }
+.wbtn:hover { transform:scale(1.25); }
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
 header {
@@ -334,6 +339,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
           <th onclick="techSort('ma')"   title="Price vs 50MA vs 200MA — uptrend = price > 50MA > 200MA">MA Trend</th>
           <th onclick="techSort('bull')" title="Count of bullish signals out of 5">🟢 Signals ↕</th>
           <th>Verdict</th>
+          <th style="text-align:center;width:40px" title="Add to Watchlist">★</th>
         </tr></thead>
         <tbody id="techBody"></tbody>
       </table>
@@ -446,6 +452,31 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
         <button class="btn btn-green" style="align-self:flex-end;padding:7px 16px" onclick="addManualStock()">Add</button>
       </div>
       <div id="mErr" style="font-size:11px;color:var(--red);margin-top:6px;display:none"></div>
+    </div>
+
+    <!-- Watchlist section -->
+    <div id="watchlistSection" style="display:none;margin-bottom:14px">
+      <div class="port-toolbar">
+        <span class="port-toolbar-left">★ Watchlist &nbsp;<span id="watchCount" style="font-size:10px;background:var(--amber3);color:var(--amber);border:1px solid var(--amber2);padding:1px 8px;border-radius:10px;font-family:var(--mono);font-weight:700">0</span></span>
+        <div class="port-toolbar-right">
+          <span style="font-size:11px;color:var(--muted)">Stocks you're tracking — move to holdings when ready to buy</span>
+          <button class="btn" style="font-size:11px;color:var(--red)" onclick="clearWatchlist()">✕ Clear All</button>
+        </div>
+      </div>
+      <div class="tbl-wrap" style="margin-bottom:0">
+        <table style="min-width:680px">
+          <thead><tr>
+            <th>Stock</th>
+            <th>Price</th>
+            <th>Change</th>
+            <th>🟢 Signals</th>
+            <th>MA Trend</th>
+            <th>Verdict</th>
+            <th style="text-align:center">Actions</th>
+          </tr></thead>
+          <tbody id="watchlistBody"></tbody>
+        </table>
+      </div>
     </div>
 
     <!-- Portfolio content (shown after upload) -->
@@ -794,6 +825,7 @@ async function startScan() {
     }
     showProgress(false);
     renderTech();
+    renderWatchlist();
   } else {
     const list = FUND_STOCKS.map(s => ({ sym: s.sym, yf: s.yf }));
     scanDone = 0; scanTotal = list.length;
@@ -1035,6 +1067,13 @@ function renderTech() {
       <td>
         <span class="badge ${v.cls}">${v.label}</span>
         ${d?.isNR7 ? `<br><span class="badge b-nr7">NR7 Squeeze</span>` : ""}
+      </td>
+      <td style="text-align:center">
+        <button class="wbtn" data-k="${sym}|${sec}"
+          onclick="event.stopPropagation();toggleWatch('${sym}','${sec}')"
+          style="color:${inWatch(sym,sec)?'#EF9F27':'var(--dim)'}"
+          title="${inWatch(sym,sec)?'Remove from watchlist':'Add to watchlist'}"
+        >${inWatch(sym,sec) ? "★" : "☆"}</button>
       </td>`;
     tbody.appendChild(tr);
 
@@ -1043,7 +1082,7 @@ function renderTech() {
     expTr.id = "t" + sym;
     expTr.className = "exp-row";
     if (d && d.ok) {
-      expTr.innerHTML = `<td colspan="10"><div class="exp-inner">
+      expTr.innerHTML = `<td colspan="11"><div class="exp-inner">
         <div class="exp-grid">
           <div class="exp-box"><div class="e-l">RSI (14)</div>
             <div class="e-v" style="color:${d.rsi==null?"var(--muted)":d.rsi<35?"var(--green)":d.rsi>70?"var(--red)":"var(--muted)"}">${d.rsi ?? "—"}</div>
@@ -1065,7 +1104,7 @@ function renderTech() {
         <div class="exp-note"><strong>Signal summary:</strong> RSI ${d.sigRSI?"🟢":"⚪"} · BB ${d.sigBB?"🟢":"⚪"} · MACD ${d.sigMACD?"🟢":"⚪"} · Volume ${d.sigVol?"🟢":"⚪"} · MA ${d.sigMA?"🟢":"⚪"} · ${bull >= 4?"Strong bullish setup.":bull >= 3?"Bullish lean — confirm with price action.":bull >= 2?"Mixed signals — wait for clarity.":"Weak setup — avoid or wait."}</div>
       </div></td>`;
     } else {
-      expTr.innerHTML = `<td colspan="10"><div class="exp-inner"><div class="exp-note">No data for ${sym}</div></div></td>`;
+      expTr.innerHTML = `<td colspan="11"><div class="exp-inner"><div class="exp-note">No data for ${sym}</div></div></td>`;
     }
     tbody.appendChild(expTr);
   });
@@ -1216,6 +1255,112 @@ let portfolio = [];
 
 function savePort()  { try { localStorage.setItem("ts_port", JSON.stringify(portfolio)); } catch(e) {} }
 function loadPort()  { try { const s = localStorage.getItem("ts_port"); if (s) portfolio = JSON.parse(s); } catch(e) {} }
+
+// ════════════════════════════════════════════════════════════════════════════
+// WATCHLIST
+// ════════════════════════════════════════════════════════════════════════════
+let watchlist = [];
+
+function saveWatch()        { try { localStorage.setItem("ts_watchlist", JSON.stringify(watchlist)); } catch(e) {} }
+function loadWatch()        { try { const s = localStorage.getItem("ts_watchlist"); if (s) watchlist = JSON.parse(s); } catch(e) {} }
+function inWatch(sym, exch) { return watchlist.some(w => w.sym === sym && w.exchange === exch); }
+
+function toggleWatch(sym, exch) {
+  const idx = watchlist.findIndex(w => w.sym === sym && w.exchange === exch);
+  if (idx >= 0) {
+    watchlist.splice(idx, 1);
+    showToast(`${sym} removed from watchlist`);
+  } else {
+    watchlist.push({ sym, exchange: exch, addedAt: new Date().toISOString().slice(0, 10) });
+    showToast(`★ ${sym} added to watchlist`);
+  }
+  saveWatch();
+  _syncWatchBtn(sym, exch);
+  renderWatchlist();
+}
+
+function removeFromWatch(sym, exch) {
+  watchlist = watchlist.filter(w => !(w.sym === sym && w.exchange === exch));
+  saveWatch();
+  _syncWatchBtn(sym, exch);
+  renderWatchlist();
+  showToast(`${sym} removed from watchlist`);
+}
+
+function clearWatchlist() {
+  if (!watchlist.length) return;
+  if (!confirm(`Remove all ${watchlist.length} stocks from watchlist?`)) return;
+  const syms = watchlist.map(w => `${w.sym}|${w.exchange}`);
+  watchlist = [];
+  saveWatch();
+  syms.forEach(k => {
+    document.querySelectorAll(`.wbtn[data-k="${k}"]`).forEach(b => { b.textContent = "☆"; b.style.color = "var(--dim)"; b.title = "Add to watchlist"; });
+  });
+  renderWatchlist();
+}
+
+function watchToHolding(sym, exch) {
+  switchTab("port");
+  document.getElementById("mSym").value = sym;
+  document.getElementById("mExch").value = exch === "NSE" ? "NS" : "BO";
+  document.getElementById("mQty").value = "";
+  setTimeout(() => {
+    document.querySelector(".manual-form").scrollIntoView({ behavior: "smooth", block: "center" });
+    document.getElementById("mQty").focus();
+  }, 120);
+}
+
+function _syncWatchBtn(sym, exch) {
+  const on = inWatch(sym, exch);
+  document.querySelectorAll(`.wbtn[data-k="${sym}|${exch}"]`).forEach(b => {
+    b.textContent = on ? "★" : "☆";
+    b.style.color = on ? "#EF9F27" : "var(--dim)";
+    b.title = on ? "Remove from watchlist" : "Add to watchlist";
+  });
+}
+
+function renderWatchlist() {
+  const sec = document.getElementById("watchlistSection");
+  const cnt = document.getElementById("watchCount");
+  if (!sec) return;
+  if (!watchlist.length) { sec.style.display = "none"; return; }
+  sec.style.display = "";
+  if (cnt) cnt.textContent = watchlist.length;
+  const tbody = document.getElementById("watchlistBody");
+  tbody.innerHTML = "";
+  watchlist.forEach(w => {
+    const sig   = (techStocks || []).find(s => s.tradingsymbol === w.sym && s.exchange === w.exchange);
+    const price = sig?.close ?? null;
+    const chg   = sig?.change_1d ?? null;
+    const bull  = sig?.bull_count ?? null;
+    const trend = sig?.ma_trend  ?? null;
+    const v     = bull != null ? techVerdict(bull, true) : null;
+    const tr    = document.createElement("tr");
+    tr.innerHTML = `
+      <td><div class="sym-name">${w.sym}</div><div class="sym-sec">${w.exchange} · Added ${w.addedAt}</div></td>
+      <td>${price != null ? `<div class="cmp-val">₹${fmtCmp(price)}</div>` : `<span style="color:var(--dim)">—</span>`}</td>
+      <td>${chg  != null ? `<span class="chg ${chg>=0?"up":"dn"}">${chg>=0?"+":""}${chg.toFixed(2)}%</span>` : `<span style="color:var(--dim)">—</span>`}</td>
+      <td>${bull != null ? `<span style="font-size:12px;font-weight:700;font-family:var(--mono);color:${bull>=4?"var(--green)":bull>=3?"var(--blue)":"var(--muted)"}">${bull}/5</span>` : `<span style="color:var(--dim)">—</span>`}</td>
+      <td>${trend ? `<span style="font-size:11px;font-weight:600;color:${trend==="uptrend"?"var(--green)":trend==="downtrend"?"var(--red)":"var(--amber)"}">${trend}</span>` : `<span style="color:var(--dim)">—</span>`}</td>
+      <td>${v ? `<span class="badge ${v.cls}">${v.label}</span>` : `<span style="font-size:10px;color:var(--dim)">Run scan first</span>`}</td>
+      <td style="text-align:center;white-space:nowrap">
+        <button class="btn btn-green" style="font-size:10px;padding:3px 10px" onclick="watchToHolding('${w.sym}','${w.exchange}')">+ Holdings</button>
+        <button class="btn" style="font-size:10px;padding:3px 8px;color:var(--red);margin-left:4px" onclick="removeFromWatch('${w.sym}','${w.exchange}')">✕</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const wrap = document.getElementById("toastWrap");
+  if (!wrap) return;
+  const t = document.createElement("div");
+  t.textContent = msg;
+  t.style.cssText = "background:#1e2435;color:#fff;font-size:12px;font-weight:600;padding:9px 18px;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.25);animation:toastIn .2s ease;font-family:var(--font);white-space:nowrap";
+  wrap.appendChild(t);
+  setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .3s"; setTimeout(() => t.remove(), 320); }, 2400);
+}
 
 // Populate symbol datalist from UNIVERSE
 function initSymList() {
@@ -3170,10 +3315,12 @@ function checkKiteReturn() {
 updatePill();
 setInterval(updatePill, 60000);
 loadPort();
+loadWatch();
 initSymList();
 renderTech();
 fundReScore();
 if (portfolio.length) renderPortfolio();
+renderWatchlist();
 checkKiteReturn();
 startScan();
 scheduleAuto();
@@ -3441,5 +3588,6 @@ setInterval(() => {
   }
 }, 1000);
 </script>
+<div id="toastWrap" style="position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none"></div>
 </body>
 </html>
