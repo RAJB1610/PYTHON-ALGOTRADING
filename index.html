@@ -1334,7 +1334,15 @@ function renderWatchlist() {
   const tbody = document.getElementById("watchlistBody");
   tbody.innerHTML = "";
   watchlist.forEach(w => {
-    const sig   = (techStocks || []).find(s => s.tradingsymbol === w.sym && s.exchange === w.exchange);
+    // Pick the best entry for this symbol (same dedup logic as the tech table)
+    const candidates = (techStocks || []).filter(s => s.tradingsymbol === w.sym);
+    const sig = candidates.reduce((best, cur) => {
+      if (!best) return cur;
+      const bBull = best.bull_count ?? 0, cBull = cur.bull_count ?? 0;
+      if (cBull > bBull) return cur;
+      if (cBull === bBull && cur.exchange === "NSE") return cur;
+      return best;
+    }, null);
     const price = sig?.close ?? null;
     const chg   = sig?.change_1d ?? null;
     const bull  = sig?.bull_count ?? null;
