@@ -971,19 +971,21 @@ function renderTech() {
     if (d && d.ok) {
       expTr.innerHTML = `<td colspan="10"><div class="exp-inner">
         <div class="exp-grid">
-          <div class="exp-box"><div class="e-l">RSI (14)</div><div class="e-v" style="color:${d.rsi<35?"var(--green)":d.rsi>70?"var(--red)":"var(--muted)"}">${d.rsi}</div>
-            <div class="e-n">${d.rsi<35?"Oversold — bounce watch":d.rsi>70?"Overbought — caution":"Neutral zone"}</div></div>
-          <div class="exp-box"><div class="e-l">Bollinger Bands</div>
+          <div class="exp-box"><div class="e-l">RSI (14)</div>
+            <div class="e-v" style="color:${d.rsi==null?"var(--muted)":d.rsi<35?"var(--green)":d.rsi>70?"var(--red)":"var(--muted)"}">${d.rsi ?? "—"}</div>
+            <div class="e-n">${d.rsi==null?"—":d.rsi<35?"Oversold — bounce watch":d.rsi>70?"Overbought — caution":"Neutral zone"}</div></div>
+          ${d.bb ? `<div class="exp-box"><div class="e-l">Bollinger Bands</div>
             <div class="rng-bar"><div class="rng-fill"></div><div class="rng-dot" style="left:${Math.min(Math.max(d.bb.position,3),97)}%"></div></div>
-            <div class="e-n">Pos: ${d.bb.position.toFixed(0)}% · Upper ₹${d.bb.upper} · Lower ₹${d.bb.lower}${d.bb.isSqueeze?" · ⚡ SQUEEZE":""}</div></div>
-          <div class="exp-box"><div class="e-l">MACD (12,26,9)</div>
-            <div class="e-v" style="font-size:12px;color:${d.macd?.aboveSignal?"var(--green)":"var(--red)"}">${d.macd?.bullishCross?"🟢 BULL CROSS":d.macd?.bearishCross?"🔴 BEAR CROSS":d.macd?.aboveSignal?"Above signal":"Below signal"}</div>
-            <div class="e-n">MACD ${d.macd?.value} · Sig ${d.macd?.signal} · Hist ${d.macd?.hist}</div></div>
-          <div class="exp-box"><div class="e-l">Volume</div><div class="e-v" style="color:${d.volRatio>=2?"var(--green)":d.volRatio>=1.5?"var(--amber)":"var(--muted)"}">${d.volRatio}x avg</div>
+            <div class="e-n">Pos: ${d.bb.position.toFixed(0)}% · Upper ₹${d.bb.upper} · Lower ₹${d.bb.lower}${d.bb.isSqueeze?" · ⚡ SQUEEZE":""}</div></div>` : ""}
+          ${d.macd ? `<div class="exp-box"><div class="e-l">MACD (12,26,9)</div>
+            <div class="e-v" style="font-size:12px;color:${d.macd.aboveSignal?"var(--green)":"var(--red)"}">${d.macd.aboveSignal?"Above signal":"Below signal"}</div>
+            <div class="e-n">MACD ${d.macd.value} · Sig ${d.macd.signal} · Hist ${d.macd.hist}</div></div>` : ""}
+          <div class="exp-box"><div class="e-l">Volume</div>
+            <div class="e-v" style="color:${(d.volRatio??0)>=2?"var(--green)":(d.volRatio??0)>=1.5?"var(--amber)":"var(--muted)"}">${d.volRatio != null ? d.volRatio+"x avg" : "—"}</div>
             <div class="e-n">Today: ${fmtVol(d.volume)} · 10d avg: ${fmtVol(d.avgVol10)}</div></div>
-          <div class="exp-box"><div class="e-l">Moving Averages</div>
+          ${d.maTrend ? `<div class="exp-box"><div class="e-l">Moving Averages</div>
             <div class="e-v" style="font-size:11px;color:${d.maTrend==="uptrend"?"var(--green)":d.maTrend==="downtrend"?"var(--red)":"var(--amber)"}">${d.maTrend.toUpperCase()}</div>
-            <div class="e-n">50MA ₹${d.ma50?.toFixed(0)} · 200MA ₹${d.ma200?.toFixed(0)}</div></div>
+            <div class="e-n">50MA ₹${d.ma50?.toFixed(0) ?? "—"} · 200MA ₹${d.ma200?.toFixed(0) ?? "—"}</div></div>` : ""}
           ${d.isNR7?`<div class="exp-box" style="border-color:var(--purple)"><div class="e-l" style="color:var(--purple)">NR7 Squeeze</div><div class="e-v" style="color:var(--purple)">Active</div><div class="e-n">Narrowest range in 7 sessions — breakout imminent</div></div>`:""}
         </div>
         <div class="exp-note"><strong>Signal summary:</strong> RSI ${d.sigRSI?"🟢":"⚪"} · BB ${d.sigBB?"🟢":"⚪"} · MACD ${d.sigMACD?"🟢":"⚪"} · Volume ${d.sigVol?"🟢":"⚪"} · MA ${d.sigMA?"🟢":"⚪"} · ${bull >= 4?"Strong bullish setup.":bull >= 3?"Bullish lean — confirm with price action.":bull >= 2?"Mixed signals — wait for clarity.":"Weak setup — avoid or wait."}</div>
