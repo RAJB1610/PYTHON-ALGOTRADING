@@ -3899,6 +3899,17 @@ function _initChart(id) {
   const base    = data[0].value;
   const last    = data[data.length - 1].value;
 
+  // Must be declared before createChart (used in watermark option)
+  const isSensex  = id === "idx_sensex";
+  const idxLabel  = isSensex ? "SENSEX · BSE" : "NIFTY 50 · NSE";
+  const upClr     = isSensex ? "#185FA5"              : "#1D9E75";
+  const upFill1   = isSensex ? "rgba(24,95,165,0.22)" : "rgba(29,158,117,0.22)";
+  const upFill2   = isSensex ? "rgba(24,95,165,0.02)" : "rgba(29,158,117,0.02)";
+  const dnClr     = isSensex ? "#D97706"              : "#E24B4A";
+  const dnFill1   = isSensex ? "rgba(217,119,6,0.02)" : "rgba(226,75,74,0.02)";
+  const dnFill2   = isSensex ? "rgba(217,119,6,0.22)" : "rgba(226,75,74,0.22)";
+  const wmClr     = isSensex ? "rgba(24,95,165,0.07)" : "rgba(29,158,117,0.07)";
+
   const chart = LightweightCharts.createChart(container, {
     width:  container.offsetWidth,
     height: container.offsetHeight,
@@ -3938,17 +3949,6 @@ function _initChart(id) {
     handleScroll: true,
     handleScale:  true,
   });
-
-  // Nifty = green/red, Sensex = blue/orange — different in BOTH up and down moves
-  const isSensex  = id === "idx_sensex";
-  const idxLabel  = isSensex ? "SENSEX · BSE" : "NIFTY 50 · NSE";
-  const upClr     = isSensex ? "#185FA5"              : "#1D9E75";
-  const upFill1   = isSensex ? "rgba(24,95,165,0.22)" : "rgba(29,158,117,0.22)";
-  const upFill2   = isSensex ? "rgba(24,95,165,0.02)" : "rgba(29,158,117,0.02)";
-  const dnClr     = isSensex ? "#D97706"              : "#E24B4A";
-  const dnFill1   = isSensex ? "rgba(217,119,6,0.02)" : "rgba(226,75,74,0.02)";
-  const dnFill2   = isSensex ? "rgba(217,119,6,0.22)" : "rgba(226,75,74,0.22)";
-  const wmClr     = isSensex ? "rgba(24,95,165,0.07)" : "rgba(29,158,117,0.07)";
 
   const series = chart.addBaselineSeries({
     baseValue:       { type: "price", price: base },
