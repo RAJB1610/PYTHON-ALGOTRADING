@@ -375,7 +375,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
     <div class="tbl-wrap">
       <table>
         <thead><tr>
-          <th onclick="techSort('sym')">Stock</th>
+          <th onclick="techSort('sym')">Stock ↕</th>
           <th onclick="techSort('cmp')">CMP</th>
           <th onclick="techSort('chg1d')">1D / 1M</th>
           <th onclick="techSort('rsi')"  title="RSI(14) — <35 oversold (bullish), >70 overbought (bearish)">RSI(14) ↕</th>
@@ -427,7 +427,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
     <div class="tbl-wrap">
       <table>
         <thead><tr>
-          <th onclick="fundSort('sym')" id="fundThSym">Stock</th>
+          <th onclick="fundSort('sym')" id="fundThSym">Stock ↕</th>
           <th>Live CMP</th>
           <th>1D / 1M</th>
           <th style="text-align:center">Hard gates (4)</th>
@@ -512,7 +512,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
       <div class="tbl-wrap" style="margin-bottom:0">
         <table style="min-width:680px">
           <thead><tr>
-            <th onclick="watchSort('sym')" id="watchThSym">Stock</th>
+            <th onclick="watchSort('sym')" id="watchThSym">Stock ↕</th>
             <th>Price</th>
             <th>Change</th>
             <th>🟢 Signals</th>
@@ -543,7 +543,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
       <div class="tbl-wrap" style="margin-bottom:14px">
         <table style="min-width:900px">
           <thead><tr>
-            <th onclick="portSort('sym')" id="portThSym">Stock</th>
+            <th onclick="portSort('sym')" id="portThSym">Stock ↕</th>
             <th>Qty</th>
             <th>Avg Price</th>
             <th>Live CMP</th>
@@ -1229,7 +1229,7 @@ function renderFund() {
   }).sort((a,b) => fundSortC === "sym" ? a.sym.localeCompare(b.sym) * fundSortD : b.sc - a.sc);
 
   const fundTh = document.getElementById("fundThSym");
-  if (fundTh) fundTh.textContent = fundSortC === "sym" ? `Stock ${fundSortD === 1 ? "↑" : "↓"}` : "Stock";
+  if (fundTh) fundTh.textContent = fundSortC === "sym" ? `Stock ${fundSortD === 1 ? "↑" : "↓"}` : "Stock ↕";
 
   document.getElementById("fundCt").textContent = `${filtered.length} of ${scored.length}`;
 
@@ -1361,7 +1361,7 @@ function renderWatchlist() {
   sec.style.display = "";
   if (cnt) cnt.textContent = watchlist.length;
   const watchTh = document.getElementById("watchThSym");
-  if (watchTh) watchTh.textContent = watchSortC === "sym" ? `Stock ${watchSortD === 1 ? "↑" : "↓"}` : "Stock";
+  if (watchTh) watchTh.textContent = watchSortC === "sym" ? `Stock ${watchSortD === 1 ? "↑" : "↓"}` : "Stock ↕";
 
   const tbody = document.getElementById("watchlistBody");
   tbody.innerHTML = "";
@@ -1714,7 +1714,7 @@ function renderPortfolio() {
     <div class="ps-card"><div class="ps-n" style="color:var(--green)">${winners}</div><div class="ps-l">Winners</div></div>`;
 
   const portTh = document.getElementById("portThSym");
-  if (portTh) portTh.textContent = portSortC === "sym" ? `Stock ${portSortD === 1 ? "↑" : "↓"}` : "Stock";
+  if (portTh) portTh.textContent = portSortC === "sym" ? `Stock ${portSortD === 1 ? "↑" : "↓"}` : "Stock ↕";
 
   const sorted = [...portfolio].sort((a,b) => {
     if (portSortC === "sym") return a.sym.localeCompare(b.sym) * portSortD;
