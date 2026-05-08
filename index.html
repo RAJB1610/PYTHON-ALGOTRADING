@@ -53,6 +53,12 @@ body { background: var(--bg); color: var(--txt); font-family: var(--font); min-h
 @keyframes toastIn  { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
 @keyframes spin     { to{transform:rotate(360deg)} }
 
+/* ── Alpha picker bar ────────────────────────────────────────────────────── */
+.alpha-bar { display:flex; flex-wrap:wrap; gap:2px; margin-bottom:8px; }
+.alpha-btn { font-size:10px; font-weight:700; padding:2px 6px; border:1px solid var(--bdr); border-radius:3px; cursor:pointer; background:transparent; color:var(--muted); font-family:var(--mono); line-height:1.6; }
+.alpha-btn:hover:not(.active) { color:var(--txt); border-color:var(--dim); }
+.alpha-btn.active { background:var(--txt); color:var(--bg); border-color:var(--txt); }
+
 /* ── Notes tooltip ───────────────────────────────────────────────────────── */
 .note-wrap { position:relative; display:inline-flex; align-items:center; }
 .note-icon  { font-size:12px; cursor:default; opacity:.7; margin-left:4px; }
@@ -372,6 +378,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
       <span style="font-size:11px;color:var(--dim);margin-left:4px">50 per page</span>
     </div>
 
+    <div class="alpha-bar" id="techAlpha"></div>
     <div class="tbl-wrap">
       <table>
         <thead><tr>
@@ -423,7 +430,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
     </div>
 
     <div class="summary" id="fundSummary"></div>
-
+    <div class="alpha-bar" id="fundAlpha"></div>
     <div class="tbl-wrap">
       <table>
         <thead><tr>
@@ -509,6 +516,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
           <button class="btn" style="font-size:11px;color:var(--red)" onclick="clearWatchlist()">✕ Clear All</button>
         </div>
       </div>
+      <div class="alpha-bar" id="watchAlpha"></div>
       <div class="tbl-wrap" style="margin-bottom:0">
         <table style="min-width:680px">
           <thead><tr>
@@ -540,6 +548,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
       </div>
 
       <div id="portPager"></div>
+      <div class="alpha-bar" id="portAlpha"></div>
       <div class="tbl-wrap" style="margin-bottom:14px">
         <table style="min-width:900px">
           <thead><tr>
@@ -798,6 +807,10 @@ let   watchSortC = null;
 let   watchSortD = 1;
 let   portSortC  = null;
 let   portSortD  = 1;
+let   techLetterF  = null;
+let   fundLetterF  = null;
+let   watchLetterF = null;
+let   portLetterF  = null;
 let   activeTab  = "tech";
 let   scanDone   = 0;
 let   scanTotal  = 0;
@@ -1005,14 +1018,18 @@ function renderTech() {
     return (v(ad, techSortC) - v(bd, techSortC)) * techSortD;
   });
 
+  // Letter filter
+  const dispRows = techLetterF ? tableRows.filter(r => matchesLetter(r.sym, techLetterF)) : tableRows;
+  syncAlpha("techAlpha", techLetterF);
+
   // Clamp page to valid range
-  const totalPages = Math.max(1, Math.ceil(tableRows.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(dispRows.length / PAGE_SIZE));
   if (techPage >= totalPages) techPage = totalPages - 1;
   if (techPage < 0) techPage = 0;
   const pageStart = techPage * PAGE_SIZE;
-  const pageRows  = tableRows.slice(pageStart, pageStart + PAGE_SIZE);
+  const pageRows  = dispRows.slice(pageStart, pageStart + PAGE_SIZE);
 
-  const total = tableRows.length;
+  const total = dispRows.length;
   document.getElementById("techCt").textContent =
     `${pageStart + 1}–${Math.min(pageStart + PAGE_SIZE, total)} of ${total} stocks`;
 
@@ -1231,7 +1248,9 @@ function renderFund() {
   const fundTh = document.getElementById("fundThSym");
   if (fundTh) fundTh.textContent = fundSortC === "sym" ? `Stock ${fundSortD === 1 ? "↑" : "↓"}` : "Stock ↕";
 
-  document.getElementById("fundCt").textContent = `${filtered.length} of ${scored.length}`;
+  const fundDisp = fundLetterF ? filtered.filter(s => matchesLetter(s.sym, fundLetterF)) : filtered;
+  syncAlpha("fundAlpha", fundLetterF);
+  document.getElementById("fundCt").textContent = `${fundDisp.length} of ${scored.length}`;
 
   function pip(v, tip) {
     if (v === null) return `<div class="sp load" title="${tip}">?</div>`;
@@ -1244,7 +1263,7 @@ function renderFund() {
 
   const tbody = document.getElementById("fundBody");
   tbody.innerHTML = "";
-  filtered.forEach(s => {
+  fundDisp.forEach(s => {
     const sc = Math.max(0, s.sc);
     const scColor = sc >= 7 ? "var(--green)" : sc >= 5 ? "var(--blue)" : sc >= 3 ? "var(--amber)" : "var(--muted)";
     const tr = document.createElement("tr");
@@ -1368,7 +1387,9 @@ function renderWatchlist() {
   const watchOrdered = watchSortC === "sym"
     ? [...watchlist].sort((a,b) => a.sym.localeCompare(b.sym) * watchSortD)
     : watchlist;
-  watchOrdered.forEach(w => {
+  const watchDisp = watchLetterF ? watchOrdered.filter(w => matchesLetter(w.sym, watchLetterF)) : watchOrdered;
+  syncAlpha("watchAlpha", watchLetterF);
+  watchDisp.forEach(w => {
     // Pick the best entry for this symbol (same dedup logic as the tech table)
     const candidates = (techStocks || []).filter(s => s.tradingsymbol === w.sym);
     const sig = candidates.reduce((best, cur) => {
@@ -1723,11 +1744,14 @@ function renderPortfolio() {
     return (bCmp-b.avgPrice)/b.avgPrice - (aCmp-a.avgPrice)/a.avgPrice;
   });
 
-  const total     = sorted.length;
+  const portDisp = portLetterF ? sorted.filter(h => matchesLetter(h.sym, portLetterF)) : sorted;
+  syncAlpha("portAlpha", portLetterF);
+
+  const total     = portDisp.length;
   const totalPages = Math.ceil(total / PORT_PAGE_SIZE);
   if (portPage >= totalPages) portPage = Math.max(0, totalPages - 1);
   const pageStart = portPage * PORT_PAGE_SIZE;
-  const pageRows  = sorted.slice(pageStart, pageStart + PORT_PAGE_SIZE);
+  const pageRows  = portDisp.slice(pageStart, pageStart + PORT_PAGE_SIZE);
 
   // Pagination controls
   const pagerHTML = total > PORT_PAGE_SIZE ? `
@@ -2703,6 +2727,33 @@ function setVerdictF(key) {
   renderTech();
 }
 
+const ALPHA_KEYS = ["All","#",...("ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""))];
+
+function matchesLetter(sym, f) {
+  if (!f) return true;
+  if (f === "#") return /^\d/.test(sym);
+  return sym.toUpperCase().startsWith(f);
+}
+
+function buildAlphaBar(barId, setter) {
+  const el = document.getElementById(barId);
+  if (!el) return;
+  el.innerHTML = ALPHA_KEYS.map(k =>
+    `<button class="alpha-btn" onclick="${setter}('${k}')" data-k="${k}">${k}</button>`
+  ).join("");
+}
+
+function syncAlpha(barId, active) {
+  document.querySelectorAll(`#${barId} .alpha-btn`).forEach(b =>
+    b.classList.toggle("active", b.dataset.k === (active || "All"))
+  );
+}
+
+function setTechLetter(k)  { techLetterF  = k === "All" ? null : k; techPage  = 0; renderTech(); }
+function setFundLetter(k)  { fundLetterF  = k === "All" ? null : k; renderFund(); }
+function setWatchLetter(k) { watchLetterF = k === "All" ? null : k; renderWatchlist(); }
+function setPortLetter(k)  { portLetterF  = k === "All" ? null : k; portPage  = 0; renderPortfolio(); }
+
 function fundSort(col) {
   if (fundSortC === col) fundSortD *= -1; else { fundSortC = col; fundSortD = 1; }
   renderFund();
@@ -3451,6 +3502,10 @@ setInterval(updatePill, 60000);
 loadPort();
 loadWatch();
 initSymList();
+buildAlphaBar("techAlpha",  "setTechLetter");
+buildAlphaBar("fundAlpha",  "setFundLetter");
+buildAlphaBar("watchAlpha", "setWatchLetter");
+buildAlphaBar("portAlpha",  "setPortLetter");
 renderTech();
 fundReScore();
 if (portfolio.length) { renderPortfolio(); refreshPortPrices(); }
