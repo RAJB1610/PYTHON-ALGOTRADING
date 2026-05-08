@@ -592,20 +592,29 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
 
         <!-- ── Stock News & Events ─────────────────────────────────────── -->
         <div id="newsSection" style="margin-top:18px;display:none">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+          <!-- Header row -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
             <div>
-              <div style="font-size:10px;font-weight:700;letter-spacing:.10em;color:var(--muted);text-transform:uppercase">Latest News & Events</div>
+              <div style="font-size:10px;font-weight:700;letter-spacing:.10em;color:var(--muted);text-transform:uppercase">Latest News &amp; Events</div>
               <div style="font-size:10px;color:var(--muted);margin-top:2px">Corporate actions · Deals · Insider trading · Results · Analyst views</div>
             </div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-              <div id="newsStockTabs" style="display:flex;gap:4px;flex-wrap:wrap"></div>
-              <button id="newsRefreshBtn" class="btn" style="font-size:10px;padding:4px 11px" onclick="loadAllNews()">↺ Refresh News</button>
+            <button id="newsRefreshBtn" class="btn" style="font-size:10px;padding:4px 11px" onclick="loadAllNews()">↺ Refresh News</button>
+          </div>
+          <!-- Filter panel -->
+          <div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 14px;margin-bottom:12px;display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">Stock</div>
+              <div id="newsStockTabs"></div>
+            </div>
+            <div style="flex:1;min-width:180px">
+              <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">Category</div>
+              <div id="newsCatTabs" style="display:flex;gap:4px;flex-wrap:wrap"></div>
+            </div>
+            <div>
+              <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px">Sentiment</div>
+              <div id="newsSentTabs" style="display:flex;gap:4px;flex-wrap:wrap"></div>
             </div>
           </div>
-          <!-- Category filter -->
-          <div id="newsCatTabs" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px"></div>
-          <!-- Sentiment filter -->
-          <div id="newsSentTabs" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:10px"></div>
           <!-- News feed (scrollable) -->
           <div style="max-height:540px;overflow-y:auto;border-radius:8px">
             <div id="newsFeed" style="display:flex;flex-direction:column;gap:7px"></div>
@@ -2330,18 +2339,21 @@ async function loadAllNews() {
 
 function renderNewsStockTabs() {
   const syms = ["All", ...portfolio.map(h=>h.sym)];
-  document.getElementById("newsStockTabs").innerHTML = syms.map(s => {
-    const cache  = _newsCache[s];
-    const isLoad = cache === "loading";
-    const cnt    = Array.isArray(cache) ? cache.length : 0;
-    const active = _newsActiveSym === s;
-    return `<button onclick="setNewsSym('${s}')"
-      style="font-size:10px;padding:3px 9px;border-radius:20px;border:1px solid var(--bdr);
-             background:${active?"var(--green)":"var(--bg3)"};color:${active?"#fff":"var(--txt)"};
-             cursor:pointer;font-weight:600;white-space:nowrap;transition:.15s">
-      ${s==="All"?"All":s}${isLoad?" ⏳":cnt>0?` <span style="background:rgba(255,255,255,.25);border-radius:8px;padding:0 4px">${cnt}</span>`:""}
-    </button>`;
-  }).join("");
+  const el = document.getElementById("newsStockTabs");
+  if (!el) return;
+  el.innerHTML = `<select onchange="setNewsSym(this.value)"
+    style="font-size:11px;padding:5px 10px;border:1px solid var(--bdr);border-radius:6px;
+           background:var(--bg2);color:var(--txt);font-family:var(--font);cursor:pointer;min-width:130px">
+    ${syms.map(s => {
+      const cache = _newsCache[s];
+      const isLoad = cache === "loading";
+      const cnt   = Array.isArray(cache) ? cache.length : 0;
+      const label = s === "All"
+        ? "All stocks"
+        : `${s}${isLoad ? " ⏳" : cnt > 0 ? ` (${cnt})` : ""}`;
+      return `<option value="${s}" ${_newsActiveSym===s?"selected":""}>${label}</option>`;
+    }).join("")}
+  </select>`;
 }
 
 function setNewsSym(sym) { _newsActiveSym=sym; _newsPage=0; renderNewsStockTabs(); renderNewsCatTabs(); renderNewsSentTabs(); renderNewsFeed(); }
@@ -2359,8 +2371,7 @@ function renderNewsSentTabs() {
     { key:"neutral",  label:"— Neutral",  clr:"#6B7280", bg:"#F3F4F6", border:"#D1D5DB" },
   ];
   const active = _newsSentFilter || "all";
-  el.innerHTML = `<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-right:2px">Sentiment:</span>` +
-    opts.map(o => {
+  el.innerHTML = opts.map(o => {
       const a = active === o.key;
       return `<button onclick="setNewsSent('${o.key}')"
         style="font-size:10px;padding:3px 10px;border-radius:20px;cursor:pointer;font-weight:600;transition:.15s;
