@@ -504,6 +504,16 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
         </div>
         <button class="btn btn-green" style="align-self:flex-end;padding:7px 16px" onclick="addManualStock()">Add</button>
       </div>
+      <div class="mf-row" style="margin-top:8px">
+        <div class="mf-field" style="min-width:140px">
+          <label class="mf-label">Transaction date</label>
+          <input class="mf-input" id="mDate" type="date">
+        </div>
+        <div class="mf-field" style="flex:1;min-width:220px">
+          <label class="mf-label">Notes (optional)</label>
+          <input class="mf-input" id="mNotes" placeholder="Reason for buying, thesis…">
+        </div>
+      </div>
       <div id="mErr" style="font-size:11px;color:var(--red);margin-top:6px;display:none"></div>
     </div>
 
@@ -593,12 +603,18 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
             </div>
           </div>
           <!-- Category filter -->
-          <div id="newsCatTabs" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px"></div>
-          <!-- News feed -->
-          <div id="newsFeed" style="display:flex;flex-direction:column;gap:7px"></div>
-          <div id="newsLoader" style="display:none;padding:14px;text-align:center;font-size:12px;color:var(--muted)">
-            <div class="ai-spinner" style="margin:0 auto 6px"></div>Loading news…
+          <div id="newsCatTabs" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px"></div>
+          <!-- Sentiment filter -->
+          <div id="newsSentTabs" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:10px"></div>
+          <!-- News feed (scrollable) -->
+          <div style="max-height:540px;overflow-y:auto;border-radius:8px">
+            <div id="newsFeed" style="display:flex;flex-direction:column;gap:7px"></div>
+            <div id="newsLoader" style="display:none;padding:14px;text-align:center;font-size:12px;color:var(--muted)">
+              <div class="ai-spinner" style="margin:0 auto 6px"></div>Loading news…
+            </div>
           </div>
+          <!-- News pagination -->
+          <div id="newsPager" style="display:flex;gap:8px;align-items:center;justify-content:center;margin-top:10px"></div>
         </div>
 
         <div id="aiAnalysis" style="margin-top:14px"></div>
@@ -2183,28 +2199,30 @@ async function renderPortfolioCharts() {
 // PORTFOLIO ACTIONS
 // ════════════════════════════════════════════════════════════════════════════
 function addManualStock() {
-  const sym  = document.getElementById("mSym").value.trim().toUpperCase().replace(/\s+/g,"");
-  const qty  = parseFloat(document.getElementById("mQty").value);
-  const avg  = parseFloat(document.getElementById("mAvg").value);
-  const err  = document.getElementById("mErr");
-  if (!sym)      { err.textContent="Enter a stock symbol"; err.style.display=""; return; }
+  const sym   = document.getElementById("mSym").value.trim().toUpperCase().replace(/\s+/g,"");
+  const qty   = parseFloat(document.getElementById("mQty").value);
+  const avg   = parseFloat(document.getElementById("mAvg").value);
+  const date  = document.getElementById("mDate").value || null;
+  const notes = document.getElementById("mNotes").value.trim() || null;
+  const err   = document.getElementById("mErr");
+  if (!sym)         { err.textContent="Enter a stock symbol";   err.style.display=""; return; }
   if (!qty||qty<=0) { err.textContent="Enter a valid quantity"; err.style.display=""; return; }
   if (!avg||avg<=0) { err.textContent="Enter a valid average price"; err.style.display=""; return; }
   err.style.display="none";
   const existing = portfolio.find(h=>h.sym===sym);
   if (existing) {
-    // Average down/up
     const totalQty = existing.qty + qty;
     existing.avgPrice = +((existing.qty*existing.avgPrice + qty*avg)/totalQty).toFixed(2);
     existing.qty = totalQty;
+    if (!existing.transDate && date)  existing.transDate = date;
+    if (!existing.notes    && notes)  existing.notes     = notes;
   } else {
     const yf = sym + "." + document.getElementById("mExch").value;
-    portfolio.push({sym, qty, avgPrice:+avg.toFixed(2), cmp:null, yf});
+    portfolio.push({sym, qty, avgPrice:+avg.toFixed(2), cmp:null, yf, transDate:date, notes});
   }
   savePort();
   renderPortfolio();
-  ["mSym","mQty","mAvg"].forEach(id => document.getElementById(id).value="");
-  // Fetch live data for this stock
+  ["mSym","mQty","mAvg","mDate","mNotes"].forEach(id => document.getElementById(id).value="");
   const yf2 = portfolio.find(h => h.sym === sym)?.yf || sym + ".NS";
   fetchOne(yf2, sym).then(() => renderPortfolio());
 }
@@ -2248,9 +2266,11 @@ async function refreshPortPrices() {
 // ════════════════════════════════════════════════════════════════════════════
 // STOCK NEWS & EVENTS
 // ════════════════════════════════════════════════════════════════════════════
-let _newsCache   = {};   // sym → news[] | "loading" | "error"
+let _newsCache     = {};     // sym → news[] | "loading" | "error"
 let _newsActiveSym = "All";
 let _newsActiveCat = "All";
+let _newsSentFilter = null;  // null | "positive" | "negative" | "neutral"
+let _newsPage       = 0;
 
 const NEWS_CAT_META = {
   "All":              { icon:"📰", clr:"#374151",  bg:"#F3F4F6",  border:"#9CA3AF" },
@@ -2272,8 +2292,10 @@ async function loadAllNews() {
 
   // Reset cache and show section
   _newsCache = {};
-  _newsActiveSym = "All";
-  _newsActiveCat = "All";
+  _newsActiveSym  = "All";
+  _newsActiveCat  = "All";
+  _newsSentFilter = null;
+  _newsPage       = 0;
   document.getElementById("newsSection").style.display = "";
   document.getElementById("newsLoader").style.display  = "";
   document.getElementById("newsFeed").innerHTML        = "";
@@ -2296,10 +2318,12 @@ async function loadAllNews() {
 
     renderNewsStockTabs();
     renderNewsCatTabs();
+    renderNewsSentTabs();
     renderNewsFeed();
   }
 
   document.getElementById("newsLoader").style.display = "none";
+  renderNewsSentTabs();
   renderNewsFeed(); // final render
   btn.disabled = false; btn.textContent = "↺ Refresh";
 }
@@ -2320,8 +2344,29 @@ function renderNewsStockTabs() {
   }).join("");
 }
 
-function setNewsSym(sym) { _newsActiveSym=sym; renderNewsStockTabs(); renderNewsCatTabs(); renderNewsFeed(); }
-function setNewsCat(cat) { _newsActiveCat=cat; renderNewsCatTabs(); renderNewsFeed(); }
+function setNewsSym(sym) { _newsActiveSym=sym; _newsPage=0; renderNewsStockTabs(); renderNewsCatTabs(); renderNewsSentTabs(); renderNewsFeed(); }
+function setNewsCat(cat) { _newsActiveCat=cat; _newsPage=0; renderNewsCatTabs(); renderNewsFeed(); }
+function setNewsSent(s)  { _newsSentFilter=s==="all"?null:s; _newsPage=0; renderNewsSentTabs(); renderNewsFeed(); }
+function newsPageNav(dir){ _newsPage+=dir; renderNewsFeed(); }
+
+function renderNewsSentTabs() {
+  const el = document.getElementById("newsSentTabs");
+  if (!el) return;
+  const opts = [
+    { key:"all",      label:"All",        clr:"#6B7280", bg:"#F9FAFB", border:"#D1D5DB" },
+    { key:"positive", label:"▲ Positive", clr:"#059669", bg:"#F0FDF4", border:"#6EE7B7" },
+    { key:"negative", label:"▼ Negative", clr:"#DC2626", bg:"#FEF2F2", border:"#FCA5A5" },
+    { key:"neutral",  label:"— Neutral",  clr:"#6B7280", bg:"#F3F4F6", border:"#D1D5DB" },
+  ];
+  const active = _newsSentFilter || "all";
+  el.innerHTML = `<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-right:2px">Sentiment:</span>` +
+    opts.map(o => {
+      const a = active === o.key;
+      return `<button onclick="setNewsSent('${o.key}')"
+        style="font-size:10px;padding:3px 10px;border-radius:20px;cursor:pointer;font-weight:600;transition:.15s;
+               border:1.5px solid ${a?o.border:"#D1D5DB"};background:${a?o.bg:"#fff"};color:${a?o.clr:"#6B7280"}">${o.label}</button>`;
+    }).join("");
+}
 
 function renderNewsCatTabs() {
   const items  = getAllVisibleNews();
@@ -2347,13 +2392,17 @@ function getAllVisibleNews() {
 }
 
 function renderNewsFeed() {
+  const NEWS_PER_PAGE = 5;
   const feed   = document.getElementById("newsFeed");
+  const pager  = document.getElementById("newsPager");
   const syms   = _newsActiveSym==="All" ? portfolio.map(h=>h.sym) : [_newsActiveSym];
   const loading = syms.some(s=>_newsCache[s]==="loading");
   let   items  = getAllVisibleNews();
-  if (_newsActiveCat!=="All") items = items.filter(n=>n.category===_newsActiveCat);
+  if (_newsActiveCat  !== "All") items = items.filter(n=>n.category  === _newsActiveCat);
+  if (_newsSentFilter)           items = items.filter(n=>n.sentiment === _newsSentFilter);
 
   if (!items.length) {
+    if (pager) pager.innerHTML = "";
     if (loading) {
       feed.innerHTML = `<div style="padding:12px;text-align:center;color:var(--muted);font-size:11px">⏳ Searching the web for news…</div>`;
     } else {
@@ -2364,6 +2413,19 @@ function renderNewsFeed() {
       </div>`;
     }
     return;
+  }
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(items.length / NEWS_PER_PAGE));
+  if (_newsPage >= totalPages) _newsPage = totalPages - 1;
+  if (_newsPage < 0) _newsPage = 0;
+  const pageItems = items.slice(_newsPage * NEWS_PER_PAGE, (_newsPage + 1) * NEWS_PER_PAGE);
+  if (pager) {
+    pager.innerHTML = totalPages > 1 ? `
+      <button class="btn" style="font-size:11px;padding:3px 10px" onclick="newsPageNav(-1)" ${_newsPage===0?"disabled":""}>← Prev</button>
+      <span style="font-size:11px;color:var(--muted);font-family:var(--mono)">${_newsPage+1} / ${totalPages} &nbsp;(${items.length} articles)</span>
+      <button class="btn" style="font-size:11px;padding:3px 10px" onclick="newsPageNav(1)" ${_newsPage>=totalPages-1?"disabled":""}>Next →</button>
+    ` : `<span style="font-size:11px;color:var(--muted)">${items.length} article${items.length===1?"":"s"}</span>`;
   }
 
   // Assign a soft accent colour per stock for identity
@@ -2377,7 +2439,7 @@ function renderNewsFeed() {
     neutral :{ icon:"—", color:"#6B7280", bg:"#F9FAFB", label:"Neutral"  },
   };
 
-  feed.innerHTML = items.map(n => {
+  feed.innerHTML = pageItems.map(n => {
     const m    = NEWS_CAT_META[n.category] || NEWS_CAT_META["General"];
     const sent = sentCfg[n.sentiment]      || sentCfg.neutral;
     const symC = symColorMap[n._sym]       || "#374151";
