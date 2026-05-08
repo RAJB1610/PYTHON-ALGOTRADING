@@ -162,9 +162,9 @@ main { max-width: 1400px; margin: 0 auto; padding: 16px; }
 .sum-l { font-size: 9px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
 
 /* ── Table ───────────────────────────────────────────────────────────────── */
-.tbl-wrap { border: 1px solid var(--bdr); border-radius: var(--r); overflow-x: auto; background: var(--bg2); margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.04); }
+.tbl-wrap { border: 1px solid var(--bdr); border-radius: var(--r); overflow: auto; max-height: 65vh; background: var(--bg2); margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.04); }
 table { width: 100%; border-collapse: collapse; min-width: 900px; }
-thead th { font-size: 10px; font-weight: 700; color: var(--muted); padding: 9px 10px; border-bottom: 1px solid var(--bdr); text-align: left; background: var(--bg3); white-space: nowrap; text-transform: uppercase; letter-spacing: .05em; cursor: pointer; user-select: none; }
+thead th { font-size: 10px; font-weight: 700; color: var(--muted); padding: 9px 10px; border-bottom: 1px solid var(--bdr); text-align: left; background: var(--bg3); white-space: nowrap; text-transform: uppercase; letter-spacing: .05em; cursor: pointer; user-select: none; position: sticky; top: 0; z-index: 2; }
 thead th:hover { color: var(--txt); }
 thead th.sorted { color: var(--green); }
 tbody tr { border-bottom: 1px solid var(--bdr); cursor: pointer; transition: background .1s; }
