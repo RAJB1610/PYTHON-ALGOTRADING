@@ -427,7 +427,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
     <div class="tbl-wrap">
       <table>
         <thead><tr>
-          <th>Stock</th>
+          <th onclick="fundSort('sym')" id="fundThSym">Stock</th>
           <th>Live CMP</th>
           <th>1D / 1M</th>
           <th style="text-align:center">Hard gates (4)</th>
@@ -512,7 +512,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
       <div class="tbl-wrap" style="margin-bottom:0">
         <table style="min-width:680px">
           <thead><tr>
-            <th>Stock</th>
+            <th onclick="watchSort('sym')" id="watchThSym">Stock</th>
             <th>Price</th>
             <th>Change</th>
             <th>🟢 Signals</th>
@@ -543,7 +543,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
       <div class="tbl-wrap" style="margin-bottom:14px">
         <table style="min-width:900px">
           <thead><tr>
-            <th>Stock</th>
+            <th onclick="portSort('sym')" id="portThSym">Stock</th>
             <th>Qty</th>
             <th>Avg Price</th>
             <th>Live CMP</th>
@@ -792,6 +792,12 @@ let   techPage       = 0;
 let   fundFilter     = "all";
 let   techSortC  = "bull";
 let   techSortD  = -1;
+let   fundSortC  = null;
+let   fundSortD  = 1;
+let   watchSortC = null;
+let   watchSortD = 1;
+let   portSortC  = null;
+let   portSortD  = 1;
 let   activeTab  = "tech";
 let   scanDone   = 0;
 let   scanTotal  = 0;
@@ -1220,7 +1226,10 @@ function renderFund() {
     if (fundFilter==="watch")   return s.label==="Watch";
     if (fundFilter==="avoid")   return s.label==="Avoid"||s.label==="Hard Fail";
     return true;
-  }).sort((a,b) => b.sc - a.sc);
+  }).sort((a,b) => fundSortC === "sym" ? a.sym.localeCompare(b.sym) * fundSortD : b.sc - a.sc);
+
+  const fundTh = document.getElementById("fundThSym");
+  if (fundTh) fundTh.textContent = fundSortC === "sym" ? `Stock ${fundSortD === 1 ? "↑" : "↓"}` : "Stock";
 
   document.getElementById("fundCt").textContent = `${filtered.length} of ${scored.length}`;
 
@@ -1351,9 +1360,15 @@ function renderWatchlist() {
   if (!watchlist.length) { sec.style.display = "none"; return; }
   sec.style.display = "";
   if (cnt) cnt.textContent = watchlist.length;
+  const watchTh = document.getElementById("watchThSym");
+  if (watchTh) watchTh.textContent = watchSortC === "sym" ? `Stock ${watchSortD === 1 ? "↑" : "↓"}` : "Stock";
+
   const tbody = document.getElementById("watchlistBody");
   tbody.innerHTML = "";
-  watchlist.forEach(w => {
+  const watchOrdered = watchSortC === "sym"
+    ? [...watchlist].sort((a,b) => a.sym.localeCompare(b.sym) * watchSortD)
+    : watchlist;
+  watchOrdered.forEach(w => {
     // Pick the best entry for this symbol (same dedup logic as the tech table)
     const candidates = (techStocks || []).filter(s => s.tradingsymbol === w.sym);
     const sig = candidates.reduce((best, cur) => {
@@ -1698,7 +1713,11 @@ function renderPortfolio() {
     <div class="ps-card"><div class="ps-n">${portfolio.length}</div><div class="ps-l">Holdings</div></div>
     <div class="ps-card"><div class="ps-n" style="color:var(--green)">${winners}</div><div class="ps-l">Winners</div></div>`;
 
+  const portTh = document.getElementById("portThSym");
+  if (portTh) portTh.textContent = portSortC === "sym" ? `Stock ${portSortD === 1 ? "↑" : "↓"}` : "Stock";
+
   const sorted = [...portfolio].sort((a,b) => {
+    if (portSortC === "sym") return a.sym.localeCompare(b.sym) * portSortD;
     const aCmp=liveData[a.sym]?.cmp||a.cmp||a.avgPrice;
     const bCmp=liveData[b.sym]?.cmp||b.cmp||b.avgPrice;
     return (bCmp-b.avgPrice)/b.avgPrice - (aCmp-a.avgPrice)/a.avgPrice;
@@ -2682,6 +2701,20 @@ function setVerdictF(key) {
   techVerdictF = techVerdictF === key ? null : key;
   techPage = 0;
   renderTech();
+}
+
+function fundSort(col) {
+  if (fundSortC === col) fundSortD *= -1; else { fundSortC = col; fundSortD = 1; }
+  renderFund();
+}
+function watchSort(col) {
+  if (watchSortC === col) watchSortD *= -1; else { watchSortC = col; watchSortD = 1; }
+  renderWatchlist();
+}
+function portSort(col) {
+  if (portSortC === col) portSortD *= -1; else { portSortC = col; portSortD = 1; }
+  portPage = 0;
+  renderPortfolio();
 }
 
 function setFundFilter(f, btn) {
