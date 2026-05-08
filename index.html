@@ -923,6 +923,7 @@ async function startScan() {
       techStocks = [];
     }
     showProgress(false);
+    refreshSymList();
     renderTech();
     renderWatchlist();
   } else {
@@ -1462,6 +1463,22 @@ function showToast(msg) {
 function initSymList() {
   const dl = document.getElementById("symList");
   UNIVERSE.forEach(s => { const o = document.createElement("option"); o.value = s.sym; dl.appendChild(o); });
+}
+
+function refreshSymList() {
+  const dl = document.getElementById("symList");
+  if (!dl || !techStocks.length) return;
+  // Deduplicate by symbol — prefer NSE over BSE
+  const seen = new Map();
+  techStocks.forEach(s => {
+    if (!seen.has(s.tradingsymbol) || s.exchange === "NSE") seen.set(s.tradingsymbol, s);
+  });
+  dl.innerHTML = "";
+  [...seen.keys()].sort().forEach(sym => {
+    const o = document.createElement("option");
+    o.value = sym;
+    dl.appendChild(o);
+  });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
