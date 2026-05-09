@@ -2243,21 +2243,37 @@ function debounceMSymLookup(val) {
 
 async function fetchMSymPrice(sym) {
   const el   = document.getElementById("mCmpDisplay");
-  const exch = document.getElementById("mExch").value;
-  const yf   = sym + "." + exch;
+  const exch = document.getElementById("mExch").value; // "NS" | "BO"
+
+  function showCmp(cmp, chg) {
+    const clr   = chg == null ? "var(--txt)" : chg >= 0 ? "var(--green)" : "var(--red)";
+    const badge = chg != null
+      ? `<span style="font-size:10px;color:${clr}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%</span>`
+      : "";
+    el.innerHTML = `<span style="font-weight:700;color:var(--txt)">₹${fmtCmp(cmp)}</span>${badge}
+      <button onclick="document.getElementById('mAvg').value='${cmp.toFixed(2)}'"
+        style="font-size:10px;padding:1px 7px;background:var(--bg4);border:1px solid var(--bdr);
+               border-radius:4px;cursor:pointer;color:var(--muted);margin-left:auto">Use</button>`;
+  }
+
+  // 1. techStocks cache — instant, no API call
+  const ts = (techStocks || []).find(s => s.tradingsymbol === sym);
+  if (ts?.close) { showCmp(ts.close, ts.change_1d ?? null); return; }
+
+  // 2. liveData cache — already fetched for portfolio stocks
+  const ld = liveData[sym];
+  if (ld?.cmp) { showCmp(ld.cmp, ld.chg1d ?? null); return; }
+
+  // 3. stock-chart?range=1d — lightweight, no history requirement
+  const yfExch = exch === "BO" ? "BSE" : "NSE";
   try {
-    const r = await fetch(`/.netlify/functions/quote?symbol=${encodeURIComponent(yf)}`);
+    const r = await fetch(`/.netlify/functions/stock-chart?symbol=${encodeURIComponent(sym)}&exchange=${yfExch}&range=1d`);
     const d = await r.json();
-    if (d.ok && d.cmp) {
-      const chg = d.chg1d;
-      const clr = chg == null ? "var(--txt)" : chg >= 0 ? "var(--green)" : "var(--red)";
-      const chgBadge = chg != null
-        ? `<span style="font-size:10px;color:${clr}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%</span>`
-        : "";
-      el.innerHTML = `<span style="font-weight:700;color:var(--txt)">₹${fmtCmp(d.cmp)}</span>${chgBadge}
-        <button onclick="document.getElementById('mAvg').value='${d.cmp.toFixed(2)}'"
-          style="font-size:10px;padding:1px 7px;background:var(--bg4);border:1px solid var(--bdr);
-                 border-radius:4px;cursor:pointer;color:var(--muted);margin-left:auto">Use</button>`;
+    if (d.ok && d.meta?.regularMarketPrice) {
+      const cmp  = d.meta.regularMarketPrice;
+      const prev = d.meta.previousClose;
+      const chg  = prev ? +((cmp - prev) / prev * 100).toFixed(2) : null;
+      showCmp(cmp, chg);
     } else {
       el.innerHTML = `<span style="color:var(--red);font-size:11px">Not found</span>`;
     }
