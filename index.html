@@ -484,7 +484,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
       <div class="mf-row">
         <div class="mf-field" style="min-width:120px">
           <label class="mf-label">Symbol (NSE)</label>
-          <input class="mf-input" id="mSym" placeholder="e.g. RELIANCE" list="symList">
+          <input class="mf-input" id="mSym" placeholder="e.g. RELIANCE" list="symList" oninput="debounceMSymLookup(this.value)" onchange="debounceMSymLookup(this.value)">
           <datalist id="symList"></datalist>
         </div>
         <div class="mf-field" style="min-width:80px">
@@ -495,9 +495,15 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
           <label class="mf-label">Avg buy price (₹)</label>
           <input class="mf-input" id="mAvg" type="number" placeholder="2500.00">
         </div>
+        <div class="mf-field" style="min-width:110px">
+          <label class="mf-label">Live CMP</label>
+          <div id="mCmpDisplay" style="background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--r2);padding:7px 10px;font-family:var(--mono);font-size:12px;min-height:34px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span style="color:var(--muted)">—</span>
+          </div>
+        </div>
         <div class="mf-field" style="min-width:80px">
           <label class="mf-label">Exchange</label>
-          <select class="mf-input" id="mExch">
+          <select class="mf-input" id="mExch" onchange="debounceMSymLookup(document.getElementById('mSym').value)">
             <option value="NS">NSE (.NS)</option>
             <option value="BO">BSE (.BO)</option>
           </select>
@@ -2224,6 +2230,42 @@ async function renderPortfolioCharts() {
 // ════════════════════════════════════════════════════════════════════════════
 // PORTFOLIO ACTIONS
 // ════════════════════════════════════════════════════════════════════════════
+let _mSymTimer = null;
+function debounceMSymLookup(val) {
+  clearTimeout(_mSymTimer);
+  const sym = val.trim().toUpperCase().replace(/\s+/g, "");
+  const el  = document.getElementById("mCmpDisplay");
+  if (!el) return;
+  if (!sym) { el.innerHTML = `<span style="color:var(--muted)">—</span>`; return; }
+  el.innerHTML = `<span style="color:var(--muted);font-size:11px">⏳</span>`;
+  _mSymTimer = setTimeout(() => fetchMSymPrice(sym), 500);
+}
+
+async function fetchMSymPrice(sym) {
+  const el   = document.getElementById("mCmpDisplay");
+  const exch = document.getElementById("mExch").value;
+  const yf   = sym + "." + exch;
+  try {
+    const r = await fetch(`/.netlify/functions/quote?symbol=${encodeURIComponent(yf)}`);
+    const d = await r.json();
+    if (d.ok && d.cmp) {
+      const chg = d.chg1d;
+      const clr = chg == null ? "var(--txt)" : chg >= 0 ? "var(--green)" : "var(--red)";
+      const chgBadge = chg != null
+        ? `<span style="font-size:10px;color:${clr}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%</span>`
+        : "";
+      el.innerHTML = `<span style="font-weight:700;color:var(--txt)">₹${fmtCmp(d.cmp)}</span>${chgBadge}
+        <button onclick="document.getElementById('mAvg').value='${d.cmp.toFixed(2)}'"
+          style="font-size:10px;padding:1px 7px;background:var(--bg4);border:1px solid var(--bdr);
+                 border-radius:4px;cursor:pointer;color:var(--muted);margin-left:auto">Use</button>`;
+    } else {
+      el.innerHTML = `<span style="color:var(--red);font-size:11px">Not found</span>`;
+    }
+  } catch(e) {
+    el.innerHTML = `<span style="color:var(--red);font-size:11px">Error</span>`;
+  }
+}
+
 function addManualStock() {
   const sym   = document.getElementById("mSym").value.trim().toUpperCase().replace(/\s+/g,"");
   const qty   = parseFloat(document.getElementById("mQty").value);
@@ -2249,6 +2291,8 @@ function addManualStock() {
   savePort();
   renderPortfolio();
   ["mSym","mQty","mAvg","mDate","mNotes"].forEach(id => document.getElementById(id).value="");
+  const cmpEl = document.getElementById("mCmpDisplay");
+  if (cmpEl) cmpEl.innerHTML = `<span style="color:var(--muted)">—</span>`;
   const yf2 = portfolio.find(h => h.sym === sym)?.yf || sym + ".NS";
   fetchOne(yf2, sym).then(() => renderPortfolio());
 }
