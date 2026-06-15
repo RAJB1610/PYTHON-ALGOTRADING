@@ -361,6 +361,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
       <button class="preset p-amber" data-filter="volsurge"  onclick="setPreset(this)">⚡ Volume Surge</button>
       <button class="preset p-green" data-filter="macdcross" onclick="setPreset(this)">✂ MACD Bullish</button>
       <button class="preset p-purple"data-filter="nr7"       onclick="setPreset(this)">⬛ NR7 Squeeze</button>
+      <button class="btn" onclick="exportTechCSV()" style="font-size:11px;margin-left:auto">Export CSV</button>
       <span class="result-ct" id="techCt"></span>
     </div>
 
@@ -1026,7 +1027,7 @@ function verdictBucket(bull) {
   return "av";
 }
 
-function renderTech() {
+function getTechDisplayRows() {
   let rows = techStocks.map(s => ({ sym: s.tradingsymbol, sec: s.exchange, d: normalizeSig(s) }));
 
   // When showing all exchanges, deduplicate by symbol — keep NSE if both exist, else highest bull_count
@@ -1055,12 +1056,6 @@ function renderTech() {
     else av++;
   });
 
-  // Debug: log strong-buy stocks so we can verify what's being counted
-  console.log("[screener] preset=%s verdictF=%s deduped=%d presetFiltered=%d sb=%d",
-    techPreset, techVerdictF, rows.length, presetFiltered.length, sb);
-  console.log("[screener] Strong Buy stocks:",
-    presetFiltered.filter(r => (r.d.bullCount ?? 0) >= 4).map(r => `${r.sym}(${r.sec}) bull=${r.d.bullCount}`));
-
   // Step 3: apply verdict card filter on top (only affects the table rows)
   const tableRows = techVerdictF
     ? presetFiltered.filter(r => verdictBucket(r.d.bullCount ?? 0) === techVerdictF)
@@ -1087,6 +1082,12 @@ function renderTech() {
 
   // Letter filter
   const dispRows = techLetterF ? tableRows.filter(r => matchesLetter(r.sym, techLetterF)) : tableRows;
+  return { rows, presetFiltered, tableRows, dispRows, counts: { sb, b, n, av } };
+}
+
+function renderTech() {
+  const { rows, dispRows, counts } = getTechDisplayRows();
+  const { sb, b, n, av } = counts;
   syncAlpha("techAlpha", techLetterF);
 
   // Clamp page to valid range
@@ -2798,6 +2799,48 @@ function renderAICards(analysis) {
 // ════════════════════════════════════════════════════════════════════════════
 // EXPORT
 // ════════════════════════════════════════════════════════════════════════════
+function exportTechCSV() {
+  const { dispRows } = getTechDisplayRows();
+  if (!dispRows.length) {
+    showToast("No screener rows to export");
+    return;
+  }
+
+  const header = [
+    "Symbol","Exchange","CMP","Change 1D %","RSI","BB Position %",
+    "MACD Hist","MACD Above Signal","Volume Ratio","MA Trend","NR7",
+    "Bull Signals","Verdict"
+  ];
+  const rows = dispRows.map(({ sym, sec, d }) => {
+    const verdict = techVerdict(d?.bullCount ?? 0, d);
+    return [
+      sym,
+      sec,
+      d?.cmp ?? "",
+      d?.chg1d ?? "",
+      d?.rsi ?? "",
+      d?.bb?.position ?? "",
+      d?.macd?.hist ?? "",
+      d?.macd?.aboveSignal === true ? "Yes" : d?.macd?.aboveSignal === false ? "No" : "",
+      d?.volRatio ?? "",
+      d?.maTrend ?? "",
+      d?.isNR7 ? "Yes" : "No",
+      d?.bullCount ?? "",
+      verdict.label
+    ].map(csvVal).join(",");
+  });
+
+  const date = new Date().toISOString().slice(0, 10);
+  const parts = ["screener", techExch.toLowerCase(), techPreset, techVerdictF || "all", date];
+  downloadText([header.map(csvVal).join(","), ...rows].join("\n"), `${parts.join("-")}.csv`, "text/csv");
+  showToast(`Exported ${dispRows.length} screener rows`);
+}
+
+function csvVal(v) {
+  const s = v == null ? "" : String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
 function exportPortCSV() {
   const header = "Symbol,Quantity,Avg Price,Live CMP,P&L (₹),Return %,Portfolio %,Bull Signals,MA Trend,Recommendation";
   const total = portfolio.reduce((s,h) => s + h.qty*h.avgPrice, 0);

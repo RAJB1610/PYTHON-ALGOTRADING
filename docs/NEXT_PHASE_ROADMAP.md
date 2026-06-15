@@ -60,7 +60,7 @@ Objective: make the technical screener more useful for daily decision making.
 
 ### Tasks
 
-- [ ] Add CSV export for filtered screener results.
+- [x] Add CSV export for filtered screener results.
 - [ ] Add saved screener presets in `localStorage`.
 - [ ] Add "new today" flags:
   - [ ] new MACD bullish cross
@@ -173,7 +173,7 @@ Scope: small, production-focused, and low-risk.
 - [x] Add admin token protection to sync/backfill/compute endpoints.
 - [x] Add `data-status` function.
 - [x] Add dashboard data freshness panel.
-- [ ] Add screener CSV export.
+- [x] Add screener CSV export.
 - [x] Update README with Netlify env vars and sync operations.
 
 ## Environment Variables To Track
