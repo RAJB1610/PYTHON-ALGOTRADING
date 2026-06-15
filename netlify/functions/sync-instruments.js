@@ -1,11 +1,15 @@
 // Syncs NSE + BSE EQ instruments from Kite public CSV → Supabase instruments table.
 // No Kite auth required. Trigger manually or on a daily schedule.
 
+const { corsHeaders, requireAdmin } = require("./_shared/http");
+
 const BATCH = 500;
 
 exports.handler = async (event) => {
-  const H = { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" };
+  const H = corsHeaders();
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: H, body: "" };
+  const denied = requireAdmin(event, H);
+  if (denied) return denied;
 
   const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY)

@@ -122,6 +122,9 @@ header {
 .pill { font-size: 10px; font-family: var(--mono); padding: 3px 10px; border-radius: 20px; font-weight: 600; }
 .pill-open  { background: #D6F0E8; color: var(--green); border: 1px solid #A0D9C5; }
 .pill-closed{ background: #FDEAEA; color: var(--red);   border: 1px solid #F5BABA; }
+.pill-data-ok{ background: var(--bg3); color: var(--muted); border: 1px solid var(--bdr); }
+.pill-data-stale{ background: #FAEEDA; color: var(--amber); border: 1px solid #E8C47A; }
+.pill-data-error{ background: #FDEAEA; color: var(--red); border: 1px solid #F5BABA; }
 .btn { background: var(--bg3); border: 1px solid var(--bdr); color: var(--txt); padding: 5px 12px; border-radius: var(--r2); font-family: var(--font); font-size: 12px; font-weight: 600; cursor: pointer; transition: .12s; }
 .btn:hover { background: var(--bg4); }
 .btn:disabled { opacity: .45; cursor: default; }
@@ -310,6 +313,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
   <div class="logo">TradeSignal <span>Pro</span><small>V2</small></div>
   <div class="hdr-r">
     <span class="pill" id="mktPill">● Loading</span>
+    <span class="pill pill-data-ok" id="dataPill" title="Latest Supabase screener data">Data: checking</span>
     <span class="ts"  id="lastTs">Not loaded</span>
     <button class="btn" id="scanBtn" onclick="startScan()">⟳ Scan All</button>
   </div>
@@ -860,6 +864,37 @@ function updatePill() {
   const open = isOpen();
   el.textContent = open ? "● NSE OPEN" : "● NSE CLOSED";
   el.className = "pill " + (open ? "pill-open" : "pill-closed");
+}
+
+async function loadDataStatus() {
+  const el = document.getElementById("dataPill");
+  if (!el) return;
+  try {
+    const res = await fetch("/.netlify/functions/data-status");
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "status unavailable");
+
+    const sig = data.latestSignalDate || "none";
+    const candle = data.latestCandleDate || "none";
+    el.textContent = data.stale ? `Data stale: ${sig}` : `Signals: ${sig}`;
+    el.title = `Signals: ${sig}\nCandles: ${candle}\nChecked: ${fmtStatusTime(data.checkedAt)}`;
+    el.className = "pill " + (data.stale ? "pill-data-stale" : "pill-data-ok");
+  } catch(e) {
+    el.textContent = "Data: unavailable";
+    el.title = e.message;
+    el.className = "pill pill-data-error";
+  }
+}
+
+function fmtStatusTime(iso) {
+  if (!iso) return "unknown";
+  return new Date(iso).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -3649,6 +3684,8 @@ function checkKiteReturn() {
 }
 updatePill();
 setInterval(updatePill, 60000);
+loadDataStatus();
+setInterval(loadDataStatus, 5 * 60 * 1000);
 loadPort();
 loadWatch();
 initSymList();

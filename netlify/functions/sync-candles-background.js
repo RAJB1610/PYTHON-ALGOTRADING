@@ -2,11 +2,15 @@
 // No Kite auth required. Run after 18:00 IST when exchanges publish the files.
 // Optional query params: ?date=YYYYMMDD  ?exchange=NSE|BSE
 
+const { corsHeaders, requireAdmin } = require("./_shared/http");
+
 const SB_BATCH = 1000;
 
 exports.handler = async (event) => {
-  const H = { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" };
+  const H = corsHeaders();
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: H, body: "" };
+  const denied = requireAdmin(event, H);
+  if (denied) return denied;
 
   const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY)

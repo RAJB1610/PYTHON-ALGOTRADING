@@ -4,6 +4,7 @@
 // Optional params: ?from=YYYYMMDD&to=YYYYMMDD
 // Run once to build history, then use sync-candles-background for daily updates.
 
+const { corsHeaders, requireAdmin } = require("./_shared/http");
 const { unzipSync } = require("fflate");
 
 const SB_BATCH    = 1000;
@@ -16,8 +17,10 @@ const FETCH_HEADERS = {
 };
 
 exports.handler = async (event) => {
-  const H = { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" };
+  const H = corsHeaders();
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: H, body: "" };
+  const denied = requireAdmin(event, H);
+  if (denied) return denied;
 
   const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY)

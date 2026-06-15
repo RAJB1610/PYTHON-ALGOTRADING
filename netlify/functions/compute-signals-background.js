@@ -3,13 +3,17 @@
 // group in memory, compute indicators, upsert to signals table.
 // Optional param: ?date=YYYY-MM-DD (defaults to latest date in daily_candles)
 
+const { corsHeaders, requireAdmin } = require("./_shared/http");
+
 const SB_BATCH = 500;
 const PAGE     = 50000; // rows per Supabase fetch (set Supabase max-rows to 50000 in API settings)
 const LOOKBACK = 365;   // calendar days of history
 
 exports.handler = async (event) => {
-  const H = { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" };
+  const H = corsHeaders();
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: H, body: "" };
+  const denied = requireAdmin(event, H);
+  if (denied) return denied;
 
   const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY)
