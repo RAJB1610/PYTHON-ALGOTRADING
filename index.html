@@ -279,6 +279,13 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
 .rec-partial{background:#FAEEDA;color:var(--amber);border:1px solid #E8C47A}
 .rec-reduce {background:#FDEAEA;color:var(--red);border:1px solid #F5BABA}
 .rec-exit   {background:#FDEAEA;color:var(--red2);border:1px solid #F5BABA;font-weight:700}
+.assist-action-cell{display:flex;flex-direction:column;gap:4px;align-items:flex-start;min-width:120px}
+.assist-reason{font-size:10px;color:var(--muted);line-height:1.35;max-width:190px}
+.assist-flags{display:flex;gap:3px;flex-wrap:wrap}
+.assist-flag{font-size:8px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:8px;padding:1px 6px;background:var(--bg3);border:1px solid var(--bdr);color:var(--muted);font-family:var(--mono)}
+.assist-flag.risk{background:#FDEAEA;color:var(--red);border-color:#F5BABA}
+.assist-flag.good{background:#D6F0E8;color:var(--green);border-color:#A0D9C5}
+.assist-flag.warn{background:#FAEEDA;color:var(--amber);border-color:#E8C47A}
 
 .analysis-box{background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r);padding:16px 18px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .ab-title{font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
@@ -1861,6 +1868,7 @@ function renderPortfolio() {
     const portPct  = totalInvested ? (invested/totalInvested*100).toFixed(1) : "—";
     const bull     = live?._failed ? null : live?.bullCount;
     const rec      = getRecommendation(h, live);
+    const action   = getAssistantAction(h, live);
     const cmpCell  = cmp ? `₹${fmtCmp(cmp)}` : live ? `<span style="color:var(--dim)">—</span>` : `<span style="color:var(--muted)">Loading…</span>`;
 
     const secLabel = UNIVERSE.find(u=>u.sym===h.sym)?.sec || "";
@@ -1882,7 +1890,7 @@ function renderPortfolio() {
         ${bull!=null?`<div class="bull-pips">${[...Array(5)].map((_,i)=>`<div class="bp ${i<bull?"on":""}"></div>`).join("")}</div><div style="font-size:10px;text-align:center;font-family:var(--mono);color:${bull>=4?"var(--green)":bull>=3?"var(--blue)":"var(--muted)"}">${bull}/5</div>`:`<span style="color:var(--muted);font-size:11px">—</span>`}
       </td>
       <td><span class="${live&&!live._failed?`sig ${live.maTrend==="uptrend"?"bull":live.maTrend==="downtrend"?"bear":"warn"}`:"sig neut"}" style="font-size:10px"><div class="sig-lbl">${live&&!live._failed?live.maTrend?.toUpperCase()||"—":"—"}</div></span></td>
-      <td><span class="badge ${rec.cls}" title="${rec.reason}">${rec.label}</span></td>
+      <td>${renderAssistantActionCell(action)}</td>
       <td style="font-family:var(--mono);font-size:11px;color:var(--muted)">${h.transDate||"—"}</td>
       <td>${notesCell}</td>
       <td style="text-align:center"><button class="btn" style="font-size:10px;padding:2px 8px;color:var(--red)" onclick="removeHolding('${h.sym}')">✕</button></td>`;
@@ -1904,6 +1912,62 @@ function getRecommendation(h, live) {
   if (pnlP > 60 && bull <= 2)              return {label:"Book 40%",  cls:"badge rec-partial",reason:`Up ${pnlP.toFixed(0)}% — consider partial profit booking`};
   if (bull >= 3)                           return {label:"Hold+",     cls:"badge rec-hold",   reason:`Positive setup (${bull}/5 bull signals)`};
   return                                          {label:"Hold",      cls:"badge rec-hold",   reason:`Neutral setup (${bull<0?"no live data":bull+"/5 bull signals"})`};
+}
+
+function getAssistantAction(h, live) {
+  const rec = getRecommendation(h, live);
+  const cmp = live?.cmp || h.cmp || h.avgPrice;
+  const pnlPct = h.avgPrice ? (cmp - h.avgPrice) / h.avgPrice * 100 : 0;
+  const bull = live?._failed ? null : live?.bullCount ?? null;
+  const trend = live?._failed ? null : live?.maTrend ?? null;
+  const flags = [];
+
+  if (pnlPct <= -20) flags.push({ label:"Deep loss", kind:"risk" });
+  if (pnlPct <= -10 && (bull ?? 0) <= 1) flags.push({ label:"Weak loss", kind:"risk" });
+  if (trend === "downtrend") flags.push({ label:"Downtrend", kind:"risk" });
+  if ((bull ?? 0) >= 4) flags.push({ label:"Strong setup", kind:"good" });
+  if (pnlPct >= 50 && (bull ?? 0) <= 2) flags.push({ label:"Protect gain", kind:"warn" });
+
+  const action = normalizeAssistantAction(rec.label);
+  const labelMap = {
+    ADD: "ADD",
+    HOLD_PLUS: "HOLD+",
+    HOLD: "HOLD",
+    BOOK_PARTIAL: "BOOK PARTIAL",
+    REDUCE: "REDUCE",
+    EXIT: "EXIT"
+  };
+  const clsMap = {
+    ADD: "badge rec-add",
+    HOLD_PLUS: "badge rec-hold",
+    HOLD: "badge rec-hold",
+    BOOK_PARTIAL: "badge rec-partial",
+    REDUCE: "badge rec-reduce",
+    EXIT: "badge rec-exit"
+  };
+
+  return {
+    action,
+    label: labelMap[action] || rec.label,
+    cls: clsMap[action] || rec.cls,
+    reason: rec.reason,
+    pnlPct,
+    bull,
+    trend,
+    flags
+  };
+}
+
+function renderAssistantActionCell(action) {
+  const flags = action.flags.length
+    ? `<div class="assist-flags">${action.flags.map(f => `<span class="assist-flag ${f.kind}">${esc(f.label)}</span>`).join("")}</div>`
+    : "";
+  return `
+    <div class="assist-action-cell">
+      <span class="${action.cls}" title="${esc(action.reason)}">${esc(action.label)}</span>
+      <div class="assist-reason">${esc(action.reason)}</div>
+      ${flags}
+    </div>`;
 }
 
 function analyzePortfolioAssistant() {
