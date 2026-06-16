@@ -864,6 +864,7 @@ const FUND_STOCKS = [
 // ════════════════════════════════════════════════════════════════════════════
 const liveData       = {};         // keyed by sym (used by portfolio/fundamentals)
 let   stockMeta      = {};         // keyed by sym, persisted for portfolio sector subtitles
+const STOCK_COLORS   = ["#2563EB","#059669","#D97706","#7C3AED","#DC2626","#0891B2","#65A30D","#C026D3"];
 let   portPage       = 0;
 const PORT_PAGE_SIZE = 50;
 let   techStocks     = [];         // from screen-stocks API
@@ -2234,6 +2235,7 @@ function analyzePortfolioAssistant() {
     const bullCount = live?._failed ? null : live?.bullCount ?? null;
     const maTrend = live?._failed ? null : live?.maTrend ?? null;
     const rec = getRecommendation(h, live);
+    const sector = normalizeSectorLabel(getStockSectorLabel(h, false));
     const flags = [];
 
     if (weight >= 30) flags.push("concentration");
@@ -2256,6 +2258,7 @@ function analyzePortfolioAssistant() {
       bullCount,
       maTrend,
       rsi: live?.rsi ?? null,
+      sector,
       action: normalizeAssistantAction(rec.label),
       recommendation: rec.label,
       reason: rec.reason,
@@ -2270,11 +2273,42 @@ function analyzePortfolioAssistant() {
   const risks = [];
   const opportunities = [];
   const actions = [];
+  const sectorMap = new Map();
+
+  holdings.forEach(h => {
+    const key = h.sector || "Unclassified";
+    const cur = sectorMap.get(key) || { sector: key, invested: 0, current: 0, pnl: 0, holdings: [] };
+    cur.invested += h.invested;
+    cur.current += h.current;
+    cur.pnl += h.pnl;
+    cur.holdings.push(h.sym);
+    sectorMap.set(key, cur);
+  });
+
+  const sectorAllocation = [...sectorMap.values()]
+    .map(s => ({
+      ...s,
+      weight: invested ? +(s.invested / invested * 100).toFixed(2) : 0,
+      pnlPct: s.invested ? +(s.pnl / s.invested * 100).toFixed(2) : 0,
+      invested: +s.invested.toFixed(2),
+      current: +s.current.toFixed(2),
+      pnl: +s.pnl.toFixed(2),
+    }))
+    .sort((a,b) => b.weight - a.weight);
 
   const topWeight = [...holdings].sort((a,b) => b.weight - a.weight)[0];
   if (topWeight?.weight >= 30) {
     risks.push(`${topWeight.sym} is ${topWeight.weight.toFixed(1)}% of capital; reduce single-stock concentration risk.`);
     actions.push({ priority: "HIGH", sym: topWeight.sym, action: "REVIEW_SIZE", reason: "Position weight is above 30%." });
+  }
+
+  const topSector = sectorAllocation[0];
+  if (topSector?.weight >= 45) {
+    risks.push(`${topSector.sector} is ${topSector.weight.toFixed(1)}% of portfolio capital across ${topSector.holdings.length} holding(s).`);
+    actions.push({ priority: "HIGH", sym: topSector.sector, action: "REVIEW_SECTOR_EXPOSURE", reason: "Sector allocation is above 45%." });
+  } else if (topSector?.weight >= 30) {
+    risks.push(`${topSector.sector} is the largest sector exposure at ${topSector.weight.toFixed(1)}% of portfolio capital.`);
+    actions.push({ priority: "MEDIUM", sym: topSector.sector, action: "WATCH_SECTOR_EXPOSURE", reason: "Sector allocation is above 30%." });
   }
 
   holdings.filter(h => h.flags.includes("loss_with_weak_signals")).forEach(h => {
@@ -2300,6 +2334,7 @@ function analyzePortfolioAssistant() {
   healthScore += Math.min(12, pnlPct / 3);
   healthScore += (winners / Math.max(1, holdings.length) - 0.5) * 18;
   healthScore -= holdings.filter(h => h.weight >= 30).length * 14;
+  healthScore -= sectorAllocation.filter(s => s.weight >= 45).length * 10;
   healthScore -= holdings.filter(h => h.flags.includes("loss_with_weak_signals")).length * 12;
   healthScore -= holdings.filter(h => h.flags.includes("downtrend")).length * 6;
   healthScore += Math.min(10, holdings.filter(h => (h.bullCount ?? 0) >= 4).length * 4);
@@ -2320,6 +2355,7 @@ function analyzePortfolioAssistant() {
     winners,
     holdingsCount: holdings.length,
     holdings,
+    sectorAllocation,
     risks: [...new Set(risks)].slice(0, 5),
     opportunities: [...new Set(opportunities)].slice(0, 5),
     priorityActions: actions.slice(0, 8)
@@ -2335,6 +2371,12 @@ function normalizeAssistantAction(label) {
   return "HOLD";
 }
 
+function normalizeSectorLabel(label) {
+  const s = String(label || "").trim();
+  if (!s || /lookup pending|unavailable/i.test(s)) return "Unclassified";
+  return s.split("/")[0].trim() || "Unclassified";
+}
+
 function renderPortfolioAssistantPanel(a) {
   const scoreClr = a.healthScore >= 80 ? "var(--green)"
     : a.healthScore >= 65 ? "var(--blue)"
@@ -2343,6 +2385,10 @@ function renderPortfolioAssistantPanel(a) {
   const primaryActions = a.priorityActions.slice(0, 4);
   const risks = a.risks.slice(0, 4);
   const opportunities = a.opportunities.slice(0, 4);
+  const sectors = (a.sectorAllocation || []).slice(0, 5);
+  const sectorRisk = sectors[0]?.weight >= 45 ? "High concentration"
+    : sectors[0]?.weight >= 30 ? "Moderate concentration"
+    : "Balanced";
 
   const listHTML = (items, empty, icon) => items.length
     ? items.map(x => `<div class="insight-row" style="margin-bottom:6px"><span class="insight-icon">${icon}</span><span>${esc(typeof x === "string" ? x : `${x.sym}: ${x.action} - ${x.reason}`)}</span></div>`).join("")
@@ -2372,6 +2418,23 @@ function renderPortfolioAssistantPanel(a) {
       <div>
         <div class="ab-section-hdr">Opportunities</div>
         ${listHTML(opportunities, "No high-signal opportunities in current holdings.", "+")}
+      </div>
+    </div>
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--bdr)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+        <div class="ab-section-hdr" style="margin-bottom:0">Sector Allocation</div>
+        <div style="font-size:10px;font-weight:800;color:${sectors[0]?.weight>=45?"var(--red)":sectors[0]?.weight>=30?"var(--amber)":"var(--green)"};text-transform:uppercase;letter-spacing:.07em">${sectorRisk}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">
+        ${sectors.length ? sectors.map((s, i) => `
+          <div class="alloc-bar-wrap" title="${esc(s.holdings.join(", "))}">
+            <div class="alloc-bar-row">
+              <div class="alloc-sym" style="min-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.sector)}</div>
+              <div class="alloc-bg"><div class="alloc-fill" style="width:${Math.min(100, s.weight)}%;background:${STOCK_COLORS[i % STOCK_COLORS.length]}"></div></div>
+              <div class="alloc-pct">${s.weight.toFixed(1)}%</div>
+            </div>
+            <div style="font-size:10px;color:var(--muted);font-family:var(--mono);padding-left:0">${esc(s.holdings.slice(0,4).join(", "))}${s.holdings.length>4?" +"+(s.holdings.length-4):""} · ${s.pnlPct>=0?"+":""}${s.pnlPct.toFixed(1)}%</div>
+          </div>`).join("") : `<div class="insight-row"><span class="insight-icon">-</span><span>No sector metadata available yet.</span></div>`}
       </div>
     </div>
   </div>`;
@@ -3331,14 +3394,14 @@ function csvVal(v) {
 }
 
 function exportPortCSV() {
-  const header = "Symbol,Quantity,Avg Price,Live CMP,P&L (₹),Return %,Portfolio %,Bull Signals,MA Trend,Recommendation";
+  const header = "Symbol,Sector,Quantity,Avg Price,Live CMP,P&L (Rs),Return %,Portfolio %,Bull Signals,MA Trend,Recommendation";
   const total = portfolio.reduce((s,h) => s + h.qty*h.avgPrice, 0);
   const rows = portfolio.map(h => {
     const live=liveData[h.sym]; const cmp=live?.cmp||h.cmp||"";
     const pnl=cmp?(cmp-h.avgPrice)*h.qty:""; const pnlP=cmp?(cmp-h.avgPrice)/h.avgPrice*100:"";
     const portP=total?(h.qty*h.avgPrice/total*100).toFixed(1):"";
     const rec=getRecommendation(h,live);
-    return [h.sym,h.qty,h.avgPrice,cmp||"",pnl?pnl.toFixed(2):"",pnlP?pnlP.toFixed(2):"",portP,live?.bullCount??"",live?.maTrend??"",rec.label].join(",");
+    return [h.sym,getStockSectorLabel(h),h.qty,h.avgPrice,cmp||"",pnl?pnl.toFixed(2):"",pnlP?pnlP.toFixed(2):"",portP,live?.bullCount??"",live?.maTrend??"",rec.label].map(csvVal).join(",");
   });
   downloadText([header,...rows].join("\n"), "portfolio.csv", "text/csv");
 }
@@ -3346,7 +3409,7 @@ function exportPortCSV() {
 function exportPortJSON() {
   const data = portfolio.map(h => {
     const live=liveData[h.sym]; const cmp=live?.cmp||h.cmp;
-    return {...h, cmp, pnlPct:cmp?+((cmp-h.avgPrice)/h.avgPrice*100).toFixed(2):null, bullCount:live?.bullCount, maTrend:live?.maTrend};
+    return {...h, sector:getStockSectorLabel(h), cmp, pnlPct:cmp?+((cmp-h.avgPrice)/h.avgPrice*100).toFixed(2):null, bullCount:live?.bullCount, maTrend:live?.maTrend};
   });
   downloadText(JSON.stringify(data, null, 2), "portfolio.json", "application/json");
 }
