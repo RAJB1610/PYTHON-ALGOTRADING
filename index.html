@@ -2002,6 +2002,18 @@ async function hydratePortfolioMetadata() {
   }
 }
 
+async function refreshSectorMetadata() {
+  if (!portfolio.length) return;
+  for (const h of portfolio) {
+    if (stockMeta[h.sym]?._failed || !getStockSectorLabel(h, false)) delete stockMeta[h.sym];
+  }
+  saveStockMeta();
+  renderPortfolioAssistant();
+  showToast("Refreshing sector metadata");
+  await hydratePortfolioMetadata();
+  renderPortfolio();
+}
+
 function getRecommendation(h, live) {
   const fund = FUND_STOCKS.find(f => f.sym === h.sym);
   const cmp  = live?.cmp || h.cmp || h.avgPrice;
@@ -2288,6 +2300,7 @@ function analyzePortfolioAssistant() {
   const sectorAllocation = [...sectorMap.values()]
     .map(s => ({
       ...s,
+      unclassified: s.sector === "Unclassified",
       weight: invested ? +(s.invested / invested * 100).toFixed(2) : 0,
       pnlPct: s.invested ? +(s.pnl / s.invested * 100).toFixed(2) : 0,
       invested: +s.invested.toFixed(2),
@@ -2295,6 +2308,8 @@ function analyzePortfolioAssistant() {
       pnl: +s.pnl.toFixed(2),
     }))
     .sort((a,b) => b.weight - a.weight);
+  const classifiedSectorAllocation = sectorAllocation.filter(s => !s.unclassified);
+  const unclassifiedAllocation = sectorAllocation.find(s => s.unclassified) || null;
 
   const topWeight = [...holdings].sort((a,b) => b.weight - a.weight)[0];
   if (topWeight?.weight >= 30) {
@@ -2302,13 +2317,16 @@ function analyzePortfolioAssistant() {
     actions.push({ priority: "HIGH", sym: topWeight.sym, action: "REVIEW_SIZE", reason: "Position weight is above 30%." });
   }
 
-  const topSector = sectorAllocation[0];
+  const topSector = classifiedSectorAllocation[0];
   if (topSector?.weight >= 45) {
     risks.push(`${topSector.sector} is ${topSector.weight.toFixed(1)}% of portfolio capital across ${topSector.holdings.length} holding(s).`);
     actions.push({ priority: "HIGH", sym: topSector.sector, action: "REVIEW_SECTOR_EXPOSURE", reason: "Sector allocation is above 45%." });
   } else if (topSector?.weight >= 30) {
     risks.push(`${topSector.sector} is the largest sector exposure at ${topSector.weight.toFixed(1)}% of portfolio capital.`);
     actions.push({ priority: "MEDIUM", sym: topSector.sector, action: "WATCH_SECTOR_EXPOSURE", reason: "Sector allocation is above 30%." });
+  }
+  if (unclassifiedAllocation?.weight >= 20) {
+    risks.push(`${unclassifiedAllocation.weight.toFixed(1)}% of portfolio capital still needs sector classification.`);
   }
 
   holdings.filter(h => h.flags.includes("loss_with_weak_signals")).forEach(h => {
@@ -2334,7 +2352,7 @@ function analyzePortfolioAssistant() {
   healthScore += Math.min(12, pnlPct / 3);
   healthScore += (winners / Math.max(1, holdings.length) - 0.5) * 18;
   healthScore -= holdings.filter(h => h.weight >= 30).length * 14;
-  healthScore -= sectorAllocation.filter(s => s.weight >= 45).length * 10;
+  healthScore -= classifiedSectorAllocation.filter(s => s.weight >= 45).length * 10;
   healthScore -= holdings.filter(h => h.flags.includes("loss_with_weak_signals")).length * 12;
   healthScore -= holdings.filter(h => h.flags.includes("downtrend")).length * 6;
   healthScore += Math.min(10, holdings.filter(h => (h.bullCount ?? 0) >= 4).length * 4);
@@ -2356,6 +2374,8 @@ function analyzePortfolioAssistant() {
     holdingsCount: holdings.length,
     holdings,
     sectorAllocation,
+    classifiedSectorAllocation,
+    unclassifiedAllocation,
     risks: [...new Set(risks)].slice(0, 5),
     opportunities: [...new Set(opportunities)].slice(0, 5),
     priorityActions: actions.slice(0, 8)
@@ -2385,10 +2405,11 @@ function renderPortfolioAssistantPanel(a) {
   const primaryActions = a.priorityActions.slice(0, 4);
   const risks = a.risks.slice(0, 4);
   const opportunities = a.opportunities.slice(0, 4);
-  const sectors = (a.sectorAllocation || []).slice(0, 5);
+  const sectors = (a.classifiedSectorAllocation || []).slice(0, 5);
+  const unclassified = a.unclassifiedAllocation || null;
   const sectorRisk = sectors[0]?.weight >= 45 ? "High concentration"
     : sectors[0]?.weight >= 30 ? "Moderate concentration"
-    : "Balanced";
+    : sectors.length ? "Balanced" : "Needs metadata";
 
   const listHTML = (items, empty, icon) => items.length
     ? items.map(x => `<div class="insight-row" style="margin-bottom:6px"><span class="insight-icon">${icon}</span><span>${esc(typeof x === "string" ? x : `${x.sym}: ${x.action} - ${x.reason}`)}</span></div>`).join("")
@@ -2422,7 +2443,7 @@ function renderPortfolioAssistantPanel(a) {
     </div>
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--bdr)">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
-        <div class="ab-section-hdr" style="margin-bottom:0">Sector Allocation</div>
+        <div class="ab-section-hdr" style="margin-bottom:0">Classified Sector Allocation</div>
         <div style="font-size:10px;font-weight:800;color:${sectors[0]?.weight>=45?"var(--red)":sectors[0]?.weight>=30?"var(--amber)":"var(--green)"};text-transform:uppercase;letter-spacing:.07em">${sectorRisk}</div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">
@@ -2434,8 +2455,17 @@ function renderPortfolioAssistantPanel(a) {
               <div class="alloc-pct">${s.weight.toFixed(1)}%</div>
             </div>
             <div style="font-size:10px;color:var(--muted);font-family:var(--mono);padding-left:0">${esc(s.holdings.slice(0,4).join(", "))}${s.holdings.length>4?" +"+(s.holdings.length-4):""} · ${s.pnlPct>=0?"+":""}${s.pnlPct.toFixed(1)}%</div>
-          </div>`).join("") : `<div class="insight-row"><span class="insight-icon">-</span><span>No sector metadata available yet.</span></div>`}
+          </div>`).join("") : `<div class="insight-row"><span class="insight-icon">-</span><span>No classified sector metadata yet. Use Refresh Sector Metadata after prices load.</span></div>`}
       </div>
+      ${unclassified ? `
+        <div style="margin-top:10px;background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--r2);padding:9px 10px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+          <div style="font-size:11px;color:var(--muted);line-height:1.5">
+            <strong style="color:var(--txt)">Needs classification:</strong>
+            ${unclassified.holdings.length} holding(s), ${unclassified.weight.toFixed(1)}% of capital.
+            ${esc(unclassified.holdings.slice(0,8).join(", "))}${unclassified.holdings.length>8?" +"+(unclassified.holdings.length-8):""}
+          </div>
+          <button class="btn" style="font-size:10px;padding:4px 10px" onclick="refreshSectorMetadata()">Refresh Sector Metadata</button>
+        </div>` : ""}
     </div>
   </div>`;
 }
