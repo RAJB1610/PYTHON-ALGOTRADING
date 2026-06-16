@@ -455,6 +455,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
   <!-- ═══ PORTFOLIO TAB ════════════════════════════════════════════════════ -->
   <div id="tab-port" style="display:none">
     <input type="file" id="portFileInput" accept=".csv,.xlsx,.xls,.json,.pdf,.txt" style="display:none" onchange="handleFileInput(this)">
+    <div id="portfolioAssistant"></div>
 
     <!-- Upload zone -->
     <div class="upload-zone" id="uploadZone"
@@ -557,7 +558,6 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
     <!-- Portfolio content (shown after upload) -->
     <div id="portContent">
       <div class="port-summary" id="portSummary"></div>
-      <div id="portfolioAssistant"></div>
 
       <div class="port-toolbar">
         <span class="port-toolbar-left">Holdings</span>
@@ -2066,7 +2066,11 @@ function renderPortfolioAssistant() {
   const el = document.getElementById("portfolioAssistant");
   if (!el) return;
   if (!portfolio.length) {
-    el.innerHTML = "";
+    el.innerHTML = `
+      <div class="analysis-box" style="margin-bottom:14px;padding:16px 18px;border-left:4px solid var(--blue)">
+        <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.10em;margin-bottom:5px">Portfolio Assistant</div>
+        <div style="font-size:13px;line-height:1.6;color:var(--txt)">Upload, import, or manually add holdings to activate rule-based risk checks, priority actions, and AI-assisted portfolio analysis.</div>
+      </div>`;
     return;
   }
   el.innerHTML = renderPortfolioAssistantPanel(analyzePortfolioAssistant());
@@ -2528,6 +2532,7 @@ function clearPortfolio() {
   portfolio = [];
   savePort();
   document.getElementById("portContent").style.display="none";
+  renderPortfolioAssistant();
 }
 
 async function fetchPortfolioData() {
@@ -3906,6 +3911,7 @@ buildAlphaBar("watchAlpha", "setWatchLetter");
 buildAlphaBar("portAlpha",  "setPortLetter");
 renderTech();
 fundReScore();
+renderPortfolioAssistant();
 if (portfolio.length) { renderPortfolio(); refreshPortPrices(); }
 renderWatchlist();
 checkKiteReturn();
