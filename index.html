@@ -834,6 +834,7 @@ const FUND_STOCKS = [
 // STATE
 // ════════════════════════════════════════════════════════════════════════════
 const liveData       = {};         // keyed by sym (used by portfolio/fundamentals)
+let   stockMeta      = {};         // keyed by sym, persisted for portfolio sector subtitles
 let   portPage       = 0;
 const PORT_PAGE_SIZE = 50;
 let   techStocks     = [];         // from screen-stocks API
@@ -1384,6 +1385,8 @@ let portfolio = [];
 
 function savePort()  { try { localStorage.setItem("ts_port", JSON.stringify(portfolio)); } catch(e) {} }
 function loadPort()  { try { const s = localStorage.getItem("ts_port"); if (s) portfolio = JSON.parse(s); } catch(e) {} }
+function saveStockMeta() { try { localStorage.setItem("ts_stock_meta", JSON.stringify(stockMeta)); } catch(e) {} }
+function loadStockMeta() { try { const s = localStorage.getItem("ts_stock_meta"); if (s) stockMeta = JSON.parse(s) || {}; } catch(e) { stockMeta = {}; } }
 
 // ════════════════════════════════════════════════════════════════════════════
 // WATCHLIST
@@ -1594,6 +1597,7 @@ async function processFile(file) {
     portPage  = 0;
     savePort();
     renderPortfolio();
+    hydratePortfolioMetadata();
     fetchPortfolioData();
     showPortMsg("✅ Loaded " + holdings.length + " holdings from " + file.name, "ok");
   } catch(e) {
@@ -1620,6 +1624,7 @@ const COL = {
   transDate:["Transaction Date","Date","Trade Date","Purchase Date","Buy Date",
              "transaction date","date","Order Date","Execution Date"],
   notes:    ["Notes","notes","Note","Comment","Comments","Remarks","Description","Memo","Thesis","Analysis"],
+  sector:   ["Sector","sector","Industry","industry","Segment","Business","Category"],
 };
 
 function findCol(headers, aliases) {
@@ -1640,19 +1645,27 @@ function fuzzyKey(keys, aliases) {
 }
 
 // Map sheet_to_json rows → [{sym, qty, avgPrice, cmp}]
+function cleanSector(value) {
+  const s = String(value || "").trim();
+  if (!s || /^[\d.,\s-]+$/.test(s)) return null;
+  return s.slice(0, 80);
+}
+
 function mapJsonRows(rows, keys) {
   const symK = fuzzyKey(keys, [...COL.sym, "name", "company", "stock", "scrip"]);
   const qtyK = fuzzyKey(keys, [...COL.qty, "holding", "unit", "nos"]);
   const avgK = fuzzyKey(keys, [...COL.avgPrice, "cost", "paid", "purchase"]);
   const cmpK = fuzzyKey(keys, COL.cmp);
+  const secK = fuzzyKey(keys, COL.sector);
   if (!symK || !qtyK || !avgK) return [];
   return rows.map(row => {
     const sym = row[symK]?.toString().replace(/[^A-Z0-9&\-]/gi,"").toUpperCase();
     const qty = parseFloat(row[qtyK]?.toString().replace(/,/g,""));
     const avg = parseFloat(row[avgK]?.toString().replace(/[₹$€,\s]/g,""));
     const cmp = cmpK ? parseFloat(row[cmpK]?.toString().replace(/[₹$€,\s]/g,"")) || null : null;
+    const sector = secK ? cleanSector(row[secK]) : null;
     return (sym?.length >= 2 && qty > 0 && avg > 0)
-      ? { sym, qty, avgPrice: +avg.toFixed(2), cmp: cmp && !isNaN(cmp) ? +cmp.toFixed(2) : null }
+      ? { sym, qty, avgPrice: +avg.toFixed(2), cmp: cmp && !isNaN(cmp) ? +cmp.toFixed(2) : null, sector }
       : null;
   }).filter(Boolean);
 }
@@ -1717,12 +1730,12 @@ function parseCSV(text) {
   if (lines.length < 2) return [];
   const delim = lines[0].split("\t").length > 2 ? "\t" : ",";
   const headers = splitRow(lines[0], delim);
-  const idx = { sym: findCol(headers,COL.sym), qty: findCol(headers,COL.qty), avg: findCol(headers,COL.avgPrice), cmp: findCol(headers,COL.cmp), dt: findCol(headers,COL.transDate), notes: findCol(headers,COL.notes) };
+  const idx = { sym: findCol(headers,COL.sym), qty: findCol(headers,COL.qty), avg: findCol(headers,COL.avgPrice), cmp: findCol(headers,COL.cmp), dt: findCol(headers,COL.transDate), notes: findCol(headers,COL.notes), sector: findCol(headers,COL.sector) };
   // If headers not found in row 0, scan first 5 rows (some exports have metadata on top)
   if (idx.sym < 0 || idx.qty < 0 || idx.avg < 0) {
     for (let r = 1; r < Math.min(6, lines.length); r++) {
       const h2 = splitRow(lines[r], delim);
-      const t2 = { sym: findCol(h2,COL.sym), qty: findCol(h2,COL.qty), avg: findCol(h2,COL.avgPrice), cmp: findCol(h2,COL.cmp), dt: findCol(h2,COL.transDate), notes: findCol(h2,COL.notes) };
+      const t2 = { sym: findCol(h2,COL.sym), qty: findCol(h2,COL.qty), avg: findCol(h2,COL.avgPrice), cmp: findCol(h2,COL.cmp), dt: findCol(h2,COL.transDate), notes: findCol(h2,COL.notes), sector: findCol(h2,COL.sector) };
       if (t2.sym>=0 && t2.qty>=0 && t2.avg>=0) {
         return parseCSVWithHeader(lines.slice(r), delim, t2);
       }
@@ -1748,7 +1761,8 @@ function parseCSVWithHeader(lines, delim, idx) {
     const transDate = rawDt ? (rawDt.match(/\d{4}-\d{2}-\d{2}/)?.[0] || rawDt.slice(0,10)) : null;
     const rawNotes = idx.notes >= 0 ? c[idx.notes]?.trim() : null;
     const notes = rawNotes ? rawNotes.replace(/\\n/g, "\n").replace(/\r\n/g, "\n") || null : null;
-    return { sym, qty, avgPrice:+avg.toFixed(2), cmp:cmp&&!isNaN(cmp)?+cmp.toFixed(2):null, yf: yf || sym+".NS", transDate, notes: notes || null };
+    const sector = idx.sector >= 0 ? cleanSector(c[idx.sector]) : null;
+    return { sym, qty, avgPrice:+avg.toFixed(2), cmp:cmp&&!isNaN(cmp)?+cmp.toFixed(2):null, yf: yf || sym+".NS", transDate, notes: notes || null, sector };
   }).filter(Boolean);
 
   // Deduplicate: aggregate multiple Buy rows for same symbol (weighted avg price)
@@ -1760,6 +1774,7 @@ function parseCSVWithHeader(lines, delim, idx) {
       e.avgPrice = +((e.qty * e.avgPrice + r.qty * r.avgPrice) / totalQty).toFixed(2);
       e.qty = totalQty;
       if (!e.notes && r.notes) e.notes = r.notes;
+      if (!e.sector && r.sector) e.sector = r.sector;
     } else {
       map[r.sym] = { ...r };
     }
@@ -1774,7 +1789,8 @@ function parseJSON(text) {
     const qty = parseFloat(item.quantity||item.qty||item.Quantity||0);
     const avg = parseFloat(item.avgPrice||item.avg_price||item["Average Price"]||item["Avg Price"]||0);
     const cmp = parseFloat(item.cmp||item.ltp||item.LTP||item["Current Price"]||0)||null;
-    return (sym&&qty>0&&avg>0) ? {sym, qty, avgPrice:+avg.toFixed(2), cmp:cmp?+cmp.toFixed(2):null} : null;
+    const sector = cleanSector(item.sector || item.Sector || item.industry || item.Industry || item.segment);
+    return (sym&&qty>0&&avg>0) ? {sym, qty, avgPrice:+avg.toFixed(2), cmp:cmp?+cmp.toFixed(2):null, sector} : null;
   }).filter(Boolean);
 }
 
@@ -1871,7 +1887,7 @@ function renderPortfolio() {
     const action   = getAssistantAction(h, live);
     const cmpCell  = cmp ? `₹${fmtCmp(cmp)}` : live ? `<span style="color:var(--dim)">—</span>` : `<span style="color:var(--muted)">Loading…</span>`;
 
-    const secLabel = UNIVERSE.find(u=>u.sym===h.sym)?.sec || "";
+    const secLabel = getStockSectorLabel(h);
     const yfHint   = live?._failed ? `<span style="font-size:9px;color:var(--red2);font-family:var(--mono)">${h.yf||h.sym+".NS"} not found</span>` : secLabel ? `<div class="sym-sec">${secLabel}</div>` : "";
     const notesCell = h.notes
       ? `<div class="note-wrap"><span class="note-icon" title="">📝</span><div class="note-tip">${h.notes.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div></div>`
@@ -1898,6 +1914,62 @@ function renderPortfolio() {
   });
 
   renderRuleAnalysis(totalInvested, totalCurrent, totalPnL, pnlPct);
+}
+
+function getStockSectorLabel(h, withFallback = true) {
+  const builtin = UNIVERSE.find(u => u.sym === h.sym)?.sec || FUND_STOCKS.find(f => f.sym === h.sym)?.sec;
+  const meta = stockMeta[h.sym];
+  const label = h.sector || builtin || meta?.label || meta?.sector || meta?.industry || "";
+  if (label || !withFallback) return label;
+  return meta?._failed ? "Sector unavailable" : "Sector lookup pending";
+}
+
+function seedPortfolioMetadata() {
+  let changed = false;
+  for (const h of portfolio) {
+    const builtin = UNIVERSE.find(u => u.sym === h.sym)?.sec || FUND_STOCKS.find(f => f.sym === h.sym)?.sec;
+    if (builtin && !stockMeta[h.sym]) {
+      stockMeta[h.sym] = { sym: h.sym, label: builtin, sector: builtin, source: "builtin" };
+      changed = true;
+    }
+    if (h.sector && (!stockMeta[h.sym] || stockMeta[h.sym].source !== "yahoo")) {
+      stockMeta[h.sym] = { ...(stockMeta[h.sym] || {}), sym: h.sym, label: h.sector, sector: h.sector, source: "import" };
+      changed = true;
+    }
+  }
+  if (changed) saveStockMeta();
+}
+
+function getHoldingExchange(h) {
+  const yf = String(h.yf || "").toUpperCase();
+  return yf.endsWith(".BO") ? "BSE" : "NSE";
+}
+
+async function hydratePortfolioMetadata() {
+  if (!portfolio.length) return;
+  seedPortfolioMetadata();
+  const missing = portfolio.filter(h => !getStockSectorLabel(h, false));
+  if (!missing.length) return;
+
+  for (const h of missing.slice(0, 30)) {
+    if (stockMeta[h.sym]?._failed) continue;
+    try {
+      const r = await fetch(`/.netlify/functions/stock-meta?symbol=${encodeURIComponent(h.sym)}&exchange=${getHoldingExchange(h)}`);
+      const d = await r.json();
+      if (d.ok) {
+        const label = [d.sector, d.industry].filter(Boolean).join(" / ") || d.name || "";
+        stockMeta[h.sym] = { sym: h.sym, yf: d.yf, name: d.name, sector: d.sector, industry: d.industry, label, source: "yahoo" };
+      } else {
+        stockMeta[h.sym] = { sym: h.sym, _failed: true, source: "yahoo", error: d.error || "metadata unavailable" };
+      }
+      saveStockMeta();
+      renderPortfolio();
+      await sleep(180);
+    } catch(e) {
+      stockMeta[h.sym] = { sym: h.sym, _failed: true, source: "yahoo", error: e.message };
+      saveStockMeta();
+    }
+  }
 }
 
 function getRecommendation(h, live) {
@@ -2578,6 +2650,7 @@ function addManualStock() {
   }
   savePort();
   renderPortfolio();
+  hydratePortfolioMetadata();
   ["mSym","mQty","mAvg","mDate","mNotes"].forEach(id => document.getElementById(id).value="");
   const cmpEl = document.getElementById("mCmpDisplay");
   if (cmpEl) cmpEl.innerHTML = `<span style="color:var(--muted)">—</span>`;
@@ -3120,6 +3193,7 @@ function showSamplePort() {
   ];
   savePort();
   renderPortfolio();
+  hydratePortfolioMetadata();
   fetchPortfolioData();
 }
 
@@ -3943,6 +4017,7 @@ async function kiteAutoImport() {
       portfolio = data.holdings;
       savePort();
       renderPortfolio();
+      hydratePortfolioMetadata();
       fetchPortfolioData();
       showPortMsg(`✅ Imported ${data.holdings.length} holdings live from Kite`, "ok");
     } else if (data.needsLogin) {
@@ -3967,6 +4042,7 @@ setInterval(updatePill, 60000);
 loadDataStatus();
 setInterval(loadDataStatus, 5 * 60 * 1000);
 loadPort();
+loadStockMeta();
 loadWatch();
 initSymList();
 buildAlphaBar("techAlpha",  "setTechLetter");
@@ -3976,7 +4052,7 @@ buildAlphaBar("portAlpha",  "setPortLetter");
 renderTech();
 fundReScore();
 renderPortfolioAssistant();
-if (portfolio.length) { renderPortfolio(); refreshPortPrices(); }
+if (portfolio.length) { renderPortfolio(); hydratePortfolioMetadata(); refreshPortPrices(); }
 renderWatchlist();
 checkKiteReturn();
 startScan();
