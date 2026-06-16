@@ -10,18 +10,26 @@ exports.handler = async (event) => {
     body: JSON.stringify({ ok:false, error:String(msg), ...extra })
   });
 
-  let portfolio;
-  try { portfolio = JSON.parse(event.body || "{}").portfolio; }
+  let body, portfolio;
+  try { body = JSON.parse(event.body || "{}"); portfolio = body.portfolio; }
   catch { return fail("Invalid request body"); }
   if (!portfolio?.length) return fail("Empty portfolio");
+  const assistantContext = body.assistantContext || null;
 
   const rows = portfolio.map(h =>
     `${h.sym}: return=${h.pnlPct != null ? h.pnlPct + "%" : "?"}, signals=${h.bullCount ?? 0}/5, MA=${h.maTrend ?? "?"}, RSI=${h.rsi ?? "-"}`
   ).join("\n");
 
+  const contextBlock = assistantContext
+    ? `\nRULE ENGINE CONTEXT:\n${JSON.stringify(assistantContext, null, 2)}\n`
+    : "";
+
   const prompt = `Indian equity portfolio analyst. Analyse this NSE portfolio and return ONLY valid compact JSON. No markdown, no extra text.
 
+Use RULE ENGINE CONTEXT as the source of truth when present. Explain and prioritise those rule-derived facts. Do not invent holdings, prices, or signals.
+
 ${rows}
+${contextBlock}
 
 JSON schema. Keep all strings to one sentence max:
 {"healthScore":5,"healthLabel":"Good","healthSummary":"Two sentences.","strengths":["s1","s2"],"weaknesses":["w1","w2"],"stocks":[{"sym":"X","action":"HOLD","conviction":"MEDIUM","reasoning":"One sentence.","risk":"LOW","targetAction":"One action."}],"biggestRisk":"One sentence.","biggestOpportunity":"One sentence.","priorityActions":["a1","a2","a3"],"portfolioTheme":"Five words","verdict":"B","verdictTitle":"Four words","verdictSummary":"Two sentences."}`;

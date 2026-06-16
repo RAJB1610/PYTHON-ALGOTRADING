@@ -89,16 +89,16 @@ Objective: turn the portfolio tab into a rule-based portfolio health system, wit
 
 ### Tasks
 
-- [ ] Add portfolio health score.
-- [ ] Add rule-based diagnostics:
-  - [ ] concentration risk
-  - [ ] allocation imbalance
-  - [ ] weak-trend holdings
-  - [ ] excessive loss exposure
-  - [ ] low-signal holdings
+- [x] Add portfolio health score.
+- [x] Add rule-based diagnostics:
+  - [x] concentration risk
+  - [x] allocation imbalance
+  - [x] weak-trend holdings
+  - [x] excessive loss exposure
+  - [x] low-signal holdings
 - [ ] Add Nifty/Sensex benchmark comparison.
 - [ ] Add persistent portfolio snapshots.
-- [ ] Improve position-level recommendations.
+- [x] Improve position-level recommendations.
 - [x] Add shared AI provider client for Anthropic and OpenAI-compatible endpoints.
 - [x] Refactor AI endpoints to use server-side provider configuration.
 - [x] Add AI provider health-check endpoint.

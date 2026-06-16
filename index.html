@@ -1904,9 +1904,166 @@ function getRecommendation(h, live) {
   return                                          {label:"Hold",      cls:"badge rec-hold",   reason:`Neutral setup (${bull<0?"no live data":bull+"/5 bull signals"})`};
 }
 
+function analyzePortfolioAssistant() {
+  const invested = portfolio.reduce((s,h) => s + h.qty * h.avgPrice, 0);
+  const holdings = portfolio.map(h => {
+    const live = liveData[h.sym] || null;
+    const cmp = live?.cmp || h.cmp || h.avgPrice;
+    const inv = h.qty * h.avgPrice;
+    const cur = h.qty * cmp;
+    const pnl = cur - inv;
+    const pnlPct = h.avgPrice ? (cmp - h.avgPrice) / h.avgPrice * 100 : 0;
+    const weight = invested ? inv / invested * 100 : 0;
+    const bullCount = live?._failed ? null : live?.bullCount ?? null;
+    const maTrend = live?._failed ? null : live?.maTrend ?? null;
+    const rec = getRecommendation(h, live);
+    const flags = [];
+
+    if (weight >= 30) flags.push("concentration");
+    if (pnlPct <= -20) flags.push("deep_loss");
+    if (pnlPct <= -10 && (bullCount ?? 0) <= 1) flags.push("loss_with_weak_signals");
+    if (maTrend === "downtrend") flags.push("downtrend");
+    if ((bullCount ?? 0) >= 4) flags.push("strong_setup");
+    if (pnlPct >= 50 && (bullCount ?? 0) <= 2) flags.push("profit_protection");
+
+    return {
+      sym: h.sym,
+      qty: h.qty,
+      avgPrice: h.avgPrice,
+      cmp,
+      invested: +inv.toFixed(2),
+      current: +cur.toFixed(2),
+      pnl: +pnl.toFixed(2),
+      pnlPct: +pnlPct.toFixed(2),
+      weight: +weight.toFixed(2),
+      bullCount,
+      maTrend,
+      rsi: live?.rsi ?? null,
+      action: normalizeAssistantAction(rec.label),
+      recommendation: rec.label,
+      reason: rec.reason,
+      flags
+    };
+  });
+
+  const current = holdings.reduce((s,h) => s + h.current, 0);
+  const pnl = current - invested;
+  const pnlPct = invested ? pnl / invested * 100 : 0;
+  const winners = holdings.filter(h => h.pnl > 0).length;
+  const risks = [];
+  const opportunities = [];
+  const actions = [];
+
+  const topWeight = [...holdings].sort((a,b) => b.weight - a.weight)[0];
+  if (topWeight?.weight >= 30) {
+    risks.push(`${topWeight.sym} is ${topWeight.weight.toFixed(1)}% of capital; reduce single-stock concentration risk.`);
+    actions.push({ priority: "HIGH", sym: topWeight.sym, action: "REVIEW_SIZE", reason: "Position weight is above 30%." });
+  }
+
+  holdings.filter(h => h.flags.includes("loss_with_weak_signals")).forEach(h => {
+    risks.push(`${h.sym} is down ${Math.abs(h.pnlPct).toFixed(1)}% with weak technical support.`);
+    actions.push({ priority: "HIGH", sym: h.sym, action: "REVIEW_EXIT", reason: "Loss is paired with weak signals." });
+  });
+
+  holdings.filter(h => h.flags.includes("downtrend")).forEach(h => {
+    risks.push(`${h.sym} is in a downtrend.`);
+    actions.push({ priority: "MEDIUM", sym: h.sym, action: "WATCH_RISK", reason: "Trend is negative." });
+  });
+
+  holdings.filter(h => h.flags.includes("strong_setup")).forEach(h => {
+    opportunities.push(`${h.sym} has ${h.bullCount}/5 bullish signals.`);
+    actions.push({ priority: "MEDIUM", sym: h.sym, action: h.pnlPct > -30 ? "CONSIDER_ADD" : "WAIT", reason: "Strong technical setup." });
+  });
+
+  holdings.filter(h => h.flags.includes("profit_protection")).forEach(h => {
+    actions.push({ priority: "MEDIUM", sym: h.sym, action: "BOOK_PARTIAL", reason: "Large profit with fading signals." });
+  });
+
+  let healthScore = 70;
+  healthScore += Math.min(12, pnlPct / 3);
+  healthScore += (winners / Math.max(1, holdings.length) - 0.5) * 18;
+  healthScore -= holdings.filter(h => h.weight >= 30).length * 14;
+  healthScore -= holdings.filter(h => h.flags.includes("loss_with_weak_signals")).length * 12;
+  healthScore -= holdings.filter(h => h.flags.includes("downtrend")).length * 6;
+  healthScore += Math.min(10, holdings.filter(h => (h.bullCount ?? 0) >= 4).length * 4);
+  healthScore = Math.max(0, Math.min(100, Math.round(healthScore)));
+
+  const healthLabel = healthScore >= 80 ? "Strong"
+    : healthScore >= 65 ? "Stable"
+    : healthScore >= 45 ? "Needs Review"
+    : "High Risk";
+
+  return {
+    healthScore,
+    healthLabel,
+    invested: +invested.toFixed(2),
+    current: +current.toFixed(2),
+    pnl: +pnl.toFixed(2),
+    pnlPct: +pnlPct.toFixed(2),
+    winners,
+    holdingsCount: holdings.length,
+    holdings,
+    risks: [...new Set(risks)].slice(0, 5),
+    opportunities: [...new Set(opportunities)].slice(0, 5),
+    priorityActions: actions.slice(0, 8)
+  };
+}
+
+function normalizeAssistantAction(label) {
+  if (/exit/i.test(label)) return "EXIT";
+  if (/review|reduce/i.test(label)) return "REDUCE";
+  if (/book/i.test(label)) return "BOOK_PARTIAL";
+  if (/add/i.test(label)) return "ADD";
+  if (/hold\+/i.test(label)) return "HOLD_PLUS";
+  return "HOLD";
+}
+
+function renderPortfolioAssistantPanel(a) {
+  const scoreClr = a.healthScore >= 80 ? "var(--green)"
+    : a.healthScore >= 65 ? "var(--blue)"
+    : a.healthScore >= 45 ? "var(--amber)"
+    : "var(--red)";
+  const primaryActions = a.priorityActions.slice(0, 4);
+  const risks = a.risks.slice(0, 4);
+  const opportunities = a.opportunities.slice(0, 4);
+
+  const listHTML = (items, empty, icon) => items.length
+    ? items.map(x => `<div class="insight-row" style="margin-bottom:6px"><span class="insight-icon">${icon}</span><span>${esc(typeof x === "string" ? x : `${x.sym}: ${x.action} - ${x.reason}`)}</span></div>`).join("")
+    : `<div class="insight-row" style="margin-bottom:6px"><span class="insight-icon">-</span><span>${empty}</span></div>`;
+
+  return `
+  <div class="analysis-box" style="margin-bottom:14px;padding:16px 18px;border-left:4px solid ${scoreClr}">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:12px">
+      <div>
+        <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.10em;margin-bottom:5px">Portfolio Assistant</div>
+        <div style="font-size:13px;line-height:1.6;color:var(--txt)">Rule-based action plan generated from allocation, P&L, trend, and technical signals. AI explanation uses this context.</div>
+      </div>
+      <div style="text-align:right;min-width:120px">
+        <div style="font-size:28px;font-weight:800;font-family:var(--mono);color:${scoreClr};line-height:1">${a.healthScore}</div>
+        <div style="font-size:10px;font-weight:700;color:${scoreClr};text-transform:uppercase;letter-spacing:.08em;margin-top:4px">${a.healthLabel}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px">
+      <div>
+        <div class="ab-section-hdr">Priority Actions</div>
+        ${listHTML(primaryActions, "No urgent portfolio actions right now.", "->")}
+      </div>
+      <div>
+        <div class="ab-section-hdr">Risks To Review</div>
+        ${listHTML(risks, "No major rule-based risks detected.", "!")}
+      </div>
+      <div>
+        <div class="ab-section-hdr">Opportunities</div>
+        ${listHTML(opportunities, "No high-signal opportunities in current holdings.", "+")}
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderRuleAnalysis(invested, current, pnl, pnlPct) {
   const box = document.getElementById("ruleAnalysis");
   if (!portfolio.length) { box.innerHTML = ""; return; }
+  const assistant = analyzePortfolioAssistant();
 
   // ── Metrics ───────────────────────────────────────────────────────────────
   const rows = portfolio.map(h => {
@@ -1928,7 +2085,7 @@ function renderRuleAnalysis(invested, current, pnl, pnlPct) {
   // Weight badge colour
   const wtClr = w => w >= 30 ? "#E24B4A" : w >= 20 ? "#EF9F27" : w >= 10 ? "#378ADD" : "#1D9E75";
 
-  box.innerHTML = `
+  box.innerHTML = `${renderPortfolioAssistantPanel(assistant)}
   <!-- ── Overall Portfolio Health ─────────────────────────────────── -->
   <div style="margin-bottom:18px">
     <div style="font-size:10px;font-weight:700;letter-spacing:.10em;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Overall Portfolio Health</div>
@@ -2625,7 +2782,7 @@ async function runAI() {
     });
     const res  = await fetch("/.netlify/functions/analyze", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({portfolio: payload})
+      body: JSON.stringify({portfolio: payload, assistantContext: analyzePortfolioAssistant()})
     });
     let data;
     try { data = await res.json(); } catch(e) {
