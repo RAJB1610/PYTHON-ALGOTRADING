@@ -2325,10 +2325,6 @@ function analyzePortfolioAssistant() {
     risks.push(`${topSector.sector} is the largest sector exposure at ${topSector.weight.toFixed(1)}% of portfolio capital.`);
     actions.push({ priority: "MEDIUM", sym: topSector.sector, action: "WATCH_SECTOR_EXPOSURE", reason: "Sector allocation is above 30%." });
   }
-  if (unclassifiedAllocation?.weight >= 20) {
-    risks.push(`${unclassifiedAllocation.weight.toFixed(1)}% of portfolio capital still needs sector classification.`);
-  }
-
   holdings.filter(h => h.flags.includes("loss_with_weak_signals")).forEach(h => {
     risks.push(`${h.sym} is down ${Math.abs(h.pnlPct).toFixed(1)}% with weak technical support.`);
     actions.push({ priority: "HIGH", sym: h.sym, action: "REVIEW_EXIT", reason: "Loss is paired with weak signals." });
@@ -2402,71 +2398,78 @@ function renderPortfolioAssistantPanel(a) {
     : a.healthScore >= 65 ? "var(--blue)"
     : a.healthScore >= 45 ? "var(--amber)"
     : "var(--red)";
-  const primaryActions = a.priorityActions.slice(0, 4);
-  const risks = a.risks.slice(0, 4);
-  const opportunities = a.opportunities.slice(0, 4);
-  const sectors = (a.classifiedSectorAllocation || []).slice(0, 5);
   const unclassified = a.unclassifiedAllocation || null;
-  const sectorRisk = sectors[0]?.weight >= 45 ? "High concentration"
-    : sectors[0]?.weight >= 30 ? "Moderate concentration"
-    : sectors.length ? "Balanced" : "Needs metadata";
+  const reviewActions = a.priorityActions.filter(x => ["REVIEW_EXIT","REVIEW_SIZE","WATCH_RISK"].includes(x.action)).slice(0, 5);
+  const addActions = a.priorityActions.filter(x => ["CONSIDER_ADD","BOOK_PARTIAL"].includes(x.action)).slice(0, 4);
+  const weakLosers = a.holdings.filter(h => h.flags.includes("loss_with_weak_signals")).sort((x,y) => x.pnlPct - y.pnlPct);
+  const topWeight = [...a.holdings].sort((x,y) => y.weight - x.weight)[0];
+  const actionHeadline = reviewActions.length
+    ? `Review ${reviewActions.length} weak position${reviewActions.length===1?"":"s"} before adding fresh capital.`
+    : addActions.length
+      ? `No urgent exits. ${addActions.length} position${addActions.length===1?"":"s"} deserve follow-up.`
+      : "No urgent action from current rule checks.";
 
+  const actionText = x => {
+    const label = {
+      REVIEW_EXIT: "Review exit",
+      REVIEW_SIZE: "Check position size",
+      WATCH_RISK: "Watch risk",
+      CONSIDER_ADD: "Consider add",
+      BOOK_PARTIAL: "Book partial profit",
+      WAIT: "Wait"
+    }[x.action] || x.action.replace(/_/g, " ").toLowerCase();
+    return `${x.sym}: ${label} - ${x.reason}`;
+  };
   const listHTML = (items, empty, icon) => items.length
-    ? items.map(x => `<div class="insight-row" style="margin-bottom:6px"><span class="insight-icon">${icon}</span><span>${esc(typeof x === "string" ? x : `${x.sym}: ${x.action} - ${x.reason}`)}</span></div>`).join("")
+    ? items.map(x => `<div class="insight-row" style="margin-bottom:6px"><span class="insight-icon">${icon}</span><span>${esc(typeof x === "string" ? x : actionText(x))}</span></div>`).join("")
     : `<div class="insight-row" style="margin-bottom:6px"><span class="insight-icon">-</span><span>${empty}</span></div>`;
+  const metricHTML = (label, value, sub, color = "var(--txt)") => `
+    <div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--r2);padding:10px 12px">
+      <div style="font-size:9px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.07em">${label}</div>
+      <div style="font-size:18px;font-weight:800;font-family:var(--mono);color:${color};line-height:1.2;margin-top:4px">${value}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:3px;line-height:1.35">${esc(sub)}</div>
+    </div>`;
 
   return `
   <div class="analysis-box" style="margin-bottom:14px;padding:16px 18px;border-left:4px solid ${scoreClr}">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:12px">
       <div>
         <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.10em;margin-bottom:5px">Portfolio Assistant</div>
-        <div style="font-size:13px;line-height:1.6;color:var(--txt)">Rule-based action plan generated from allocation, P&L, trend, and technical signals. AI explanation uses this context.</div>
+        <div style="font-size:15px;font-weight:800;color:var(--txt);margin-bottom:3px">${esc(actionHeadline)}</div>
+        <div style="font-size:12px;line-height:1.6;color:var(--muted)">Based on position size, P&L, trend, and technical signals. Click any Recommendation badge below for stock-level detail.</div>
       </div>
       <div style="text-align:right;min-width:120px">
         <div style="font-size:28px;font-weight:800;font-family:var(--mono);color:${scoreClr};line-height:1">${a.healthScore}</div>
         <div style="font-size:10px;font-weight:700;color:${scoreClr};text-transform:uppercase;letter-spacing:.08em;margin-top:4px">${a.healthLabel}</div>
       </div>
     </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px">
+      ${metricHTML("Review First", reviewActions.length, weakLosers[0] ? `Worst: ${weakLosers[0].sym} ${weakLosers[0].pnlPct.toFixed(1)}%` : "No weak-loss cluster", reviewActions.length ? "var(--red)" : "var(--green)")}
+      ${metricHTML("Win Rate", `${a.winners}/${a.holdingsCount}`, `${Math.round(a.winners/Math.max(1,a.holdingsCount)*100)}% holdings in profit`, a.winners >= a.holdingsCount/2 ? "var(--green)" : "var(--amber)")}
+      ${metricHTML("Top Weight", topWeight ? `${topWeight.weight.toFixed(1)}%` : "-", topWeight ? topWeight.sym : "No holdings", topWeight?.weight >= 30 ? "var(--red)" : topWeight?.weight >= 20 ? "var(--amber)" : "var(--txt)")}
+      ${metricHTML("Potential Adds", addActions.length, addActions[0]?.sym || "None from rules", addActions.length ? "var(--green)" : "var(--muted)")}
+    </div>
+
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px">
       <div>
-        <div class="ab-section-hdr">Priority Actions</div>
-        ${listHTML(primaryActions, "No urgent portfolio actions right now.", "->")}
+        <div class="ab-section-hdr">Act First</div>
+        ${listHTML(reviewActions, "No urgent sell/reduce action right now.", "->")}
       </div>
       <div>
-        <div class="ab-section-hdr">Risks To Review</div>
-        ${listHTML(risks, "No major rule-based risks detected.", "!")}
+        <div class="ab-section-hdr">Risk Notes</div>
+        ${listHTML(a.risks.slice(0, 4), "No major rule-based risks detected.", "!")}
       </div>
       <div>
-        <div class="ab-section-hdr">Opportunities</div>
-        ${listHTML(opportunities, "No high-signal opportunities in current holdings.", "+")}
+        <div class="ab-section-hdr">Follow-Up</div>
+        ${listHTML(addActions, "No add/profit-booking candidates from current rules.", "+")}
       </div>
     </div>
-    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--bdr)">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
-        <div class="ab-section-hdr" style="margin-bottom:0">Classified Sector Allocation</div>
-        <div style="font-size:10px;font-weight:800;color:${sectors[0]?.weight>=45?"var(--red)":sectors[0]?.weight>=30?"var(--amber)":"var(--green)"};text-transform:uppercase;letter-spacing:.07em">${sectorRisk}</div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px">
-        ${sectors.length ? sectors.map((s, i) => `
-          <div class="alloc-bar-wrap" title="${esc(s.holdings.join(", "))}">
-            <div class="alloc-bar-row">
-              <div class="alloc-sym" style="min-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.sector)}</div>
-              <div class="alloc-bg"><div class="alloc-fill" style="width:${Math.min(100, s.weight)}%;background:${STOCK_COLORS[i % STOCK_COLORS.length]}"></div></div>
-              <div class="alloc-pct">${s.weight.toFixed(1)}%</div>
-            </div>
-            <div style="font-size:10px;color:var(--muted);font-family:var(--mono);padding-left:0">${esc(s.holdings.slice(0,4).join(", "))}${s.holdings.length>4?" +"+(s.holdings.length-4):""} · ${s.pnlPct>=0?"+":""}${s.pnlPct.toFixed(1)}%</div>
-          </div>`).join("") : `<div class="insight-row"><span class="insight-icon">-</span><span>No classified sector metadata yet. Use Refresh Sector Metadata after prices load.</span></div>`}
-      </div>
       ${unclassified ? `
-        <div style="margin-top:10px;background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--r2);padding:9px 10px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap">
-          <div style="font-size:11px;color:var(--muted);line-height:1.5">
-            <strong style="color:var(--txt)">Needs classification:</strong>
-            ${unclassified.holdings.length} holding(s), ${unclassified.weight.toFixed(1)}% of capital.
-            ${esc(unclassified.holdings.slice(0,8).join(", "))}${unclassified.holdings.length>8?" +"+(unclassified.holdings.length-8):""}
-          </div>
-          <button class="btn" style="font-size:10px;padding:4px 10px" onclick="refreshSectorMetadata()">Refresh Sector Metadata</button>
+        <div style="margin-top:10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">
+          <span>Sector metadata missing for ${unclassified.holdings.length} holding(s), ${unclassified.weight.toFixed(1)}% of capital.</span>
+          <button class="btn" style="font-size:10px;padding:3px 9px" onclick="refreshSectorMetadata()">Refresh metadata</button>
         </div>` : ""}
-    </div>
   </div>`;
 }
 
