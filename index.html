@@ -347,6 +347,12 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
 .pa-action-main{font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pa-action-sub{font-size:10px;color:var(--muted);margin-top:1px}
 .pa-muted-note{margin-top:10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--bdr);padding-top:8px}
+.pa-review-btn{margin-top:10px;display:flex;justify-content:flex-end}
+.pa-review-list{display:flex;flex-direction:column;gap:8px}
+.pa-review-row{border:1px solid var(--bdr);border-radius:8px;background:var(--bg2);padding:10px 11px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center}
+.pa-review-title{font-size:13px;font-weight:800;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pa-review-meta{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:3px;line-height:1.45}
+.pa-review-reason{font-size:11px;color:var(--muted);line-height:1.45;margin-top:5px}
 @media(max-width:800px){.pa-summary-head{grid-template-columns:1fr}.pa-score{text-align:left}.pa-kpis{grid-template-columns:repeat(2,1fr)}.pa-action-grid{grid-template-columns:1fr}}
 @media(max-width:500px){.pa-kpis{grid-template-columns:1fr}.pa-action-row{grid-template-columns:1fr}}
 .ai-output{font-size:12px;line-height:1.8;color:var(--txt);white-space:pre-wrap;background:var(--bg3);border-radius:var(--r2);padding:12px 14px;border-left:3px solid var(--blue2)}
@@ -2491,6 +2497,9 @@ function renderPortfolioAssistantPanel(a) {
         <div class="pa-action-list">${actionRows(addActions, "No add/profit-booking candidates.", "good")}</div>
       </div>
     </div>
+    <div class="pa-review-btn">
+      <button class="btn btn-green" style="font-size:11px;padding:5px 12px" onclick="openPortfolioReviewDetails()">Review Details</button>
+    </div>
       ${unclassified ? `
         <div class="pa-muted-note">
           <span>Sector metadata missing for ${unclassified.holdings.length} holding(s), ${unclassified.weight.toFixed(1)}% of capital.</span>
@@ -2511,6 +2520,84 @@ function renderPortfolioAssistant() {
     return;
   }
   el.innerHTML = renderPortfolioAssistantPanel(analyzePortfolioAssistant());
+}
+
+function openPortfolioReviewDetails() {
+  const a = analyzePortfolioAssistant();
+  const content = document.getElementById("paContent");
+  if (!content) return;
+  const ranked = [...a.holdings]
+    .map(h => {
+      let priority = 0;
+      if (h.flags.includes("loss_with_weak_signals")) priority += 60;
+      if (h.flags.includes("deep_loss")) priority += 30;
+      if (h.flags.includes("downtrend")) priority += 20;
+      if (h.flags.includes("concentration")) priority += 25;
+      if (h.flags.includes("profit_protection")) priority += 15;
+      if (h.flags.includes("strong_setup")) priority += 10;
+      priority += Math.max(0, -h.pnlPct);
+      return { ...h, priority };
+    })
+    .filter(h => h.priority > 0 || h.action !== "HOLD")
+    .sort((x,y) => y.priority - x.priority)
+    .slice(0, 20);
+
+  const actionChip = h => {
+    const cls = h.action === "ADD" || h.action === "HOLD_PLUS" ? "pa-chip-good"
+      : h.action === "BOOK_PARTIAL" || h.action === "REDUCE" ? "pa-chip-watch"
+      : h.action === "EXIT" ? "pa-chip-risk"
+      : "pa-chip-watch";
+    return `<span class="pa-chip ${cls}">${esc(h.recommendation || h.action)}</span>`;
+  };
+
+  content.innerHTML = `
+    <div class="pa-hdr">
+      <div style="flex:1;min-width:0">
+        <div class="pa-title">Review Details</div>
+        <div class="pa-sub">${a.holdingsCount} holdings · ${a.healthLabel} · ${a.pnlPct>=0?"+":""}${a.pnlPct.toFixed(1)}% portfolio return</div>
+      </div>
+      <button class="pa-close" onclick="closePortfolioAssistantDrawer()">✕</button>
+    </div>
+    <div class="pa-body">
+      <div class="pa-section">
+        <div class="pa-section-title">Ranked Review Queue</div>
+        <div class="pa-review-list">
+          ${ranked.length ? ranked.map(h => `
+            <div class="pa-review-row">
+              <div>
+                <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+                  <div class="pa-review-title">${esc(h.sym)}</div>
+                  ${actionChip(h)}
+                </div>
+                <div class="pa-review-meta">
+                  P&L ${h.pnlPct>=0?"+":""}${h.pnlPct.toFixed(1)}% · Weight ${h.weight.toFixed(1)}% · ${esc(h.maTrend || "trend pending")} · ${h.bullCount == null ? "signals pending" : h.bullCount + "/5 signals"}
+                </div>
+                <div class="pa-review-reason">${esc(h.reason)}</div>
+              </div>
+              <button class="btn" style="font-size:10px;padding:4px 10px" onclick="openPortfolioAssistantDrawer('${jsStr(h.sym)}')">Open</button>
+            </div>`).join("") : `
+            <div class="pa-review-row">
+              <div>
+                <div class="pa-review-title">No review queue right now</div>
+                <div class="pa-review-reason">No holdings triggered the current rule checks.</div>
+              </div>
+            </div>`}
+        </div>
+      </div>
+      <div class="pa-section">
+        <div class="pa-section-title">Portfolio Context</div>
+        <div class="pa-grid">
+          ${paMetric("Health", `${a.healthScore}`, a.healthScore >= 65 ? "var(--green)" : a.healthScore >= 45 ? "var(--amber)" : "var(--red)")}
+          ${paMetric("Win Rate", `${a.winners}/${a.holdingsCount}`)}
+          ${paMetric("Current P&L", `${a.pnl>=0?"+":"-"}₹${fmtBig(Math.abs(a.pnl))}`, a.pnl >= 0 ? "var(--green)" : "var(--red)")}
+          ${paMetric("Return", `${a.pnlPct>=0?"+":""}${a.pnlPct.toFixed(1)}%`, a.pnlPct >= 0 ? "var(--green)" : "var(--red)")}
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById("paOverlay").classList.add("open");
+  document.getElementById("portfolioAssistantPanel").classList.add("open");
+  document.body.style.overflow = "hidden";
 }
 
 function renderRuleAnalysis(invested, current, pnl, pnlPct) {
