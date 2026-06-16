@@ -323,6 +323,32 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
 .ab-text{font-size:12px;line-height:1.7;color:var(--txt)}
 .insight-row{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;background:var(--bg3);border-radius:var(--r2);margin-bottom:5px;font-size:12px;line-height:1.5}
 .insight-icon{font-size:14px;flex-shrink:0}
+.pa-summary{background:var(--bg2);border:1px solid var(--bdr);border-left:4px solid var(--blue);border-radius:var(--r);padding:14px 16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.pa-summary-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:start;margin-bottom:12px}
+.pa-eyebrow{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.11em;margin-bottom:4px}
+.pa-headline{font-size:17px;font-weight:800;color:var(--txt);line-height:1.25}
+.pa-help{font-size:11px;color:var(--muted);line-height:1.55;margin-top:4px}
+.pa-score{min-width:96px;text-align:right}
+.pa-score-n{font-size:30px;font-weight:800;font-family:var(--mono);line-height:1}
+.pa-score-l{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-top:4px}
+.pa-kpis{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:8px;margin-bottom:12px}
+.pa-kpi{background:linear-gradient(180deg,#fff,var(--bg3));border:1px solid var(--bdr);border-radius:8px;padding:9px 11px;min-height:62px}
+.pa-kpi-l{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.pa-kpi-v{font-size:18px;font-weight:800;font-family:var(--mono);line-height:1.15;margin-top:4px}
+.pa-kpi-s{font-size:10px;color:var(--muted);line-height:1.35;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pa-action-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:12px}
+.pa-action-list{display:flex;flex-direction:column;gap:6px}
+.pa-action-row{display:grid;grid-template-columns:86px minmax(0,1fr);gap:9px;align-items:start;background:transparent;border-top:1px solid var(--bdr);padding-top:8px;font-size:12px;line-height:1.45}
+.pa-action-row:first-child{border-top:0;padding-top:0}
+.pa-chip{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;border-radius:10px;padding:2px 7px;text-align:center;font-family:var(--mono);white-space:nowrap}
+.pa-chip-risk{background:#FDEAEA;color:var(--red);border:1px solid #F5BABA}
+.pa-chip-watch{background:#FAEEDA;color:var(--amber);border:1px solid #E8C47A}
+.pa-chip-good{background:#D6F0E8;color:var(--green);border:1px solid #A0D9C5}
+.pa-action-main{font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pa-action-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.pa-muted-note{margin-top:10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--bdr);padding-top:8px}
+@media(max-width:800px){.pa-summary-head{grid-template-columns:1fr}.pa-score{text-align:left}.pa-kpis{grid-template-columns:repeat(2,1fr)}.pa-action-grid{grid-template-columns:1fr}}
+@media(max-width:500px){.pa-kpis{grid-template-columns:1fr}.pa-action-row{grid-template-columns:1fr}}
 .ai-output{font-size:12px;line-height:1.8;color:var(--txt);white-space:pre-wrap;background:var(--bg3);border-radius:var(--r2);padding:12px 14px;border-left:3px solid var(--blue2)}
 .ai-loading{display:flex;align-items:center;gap:10px;padding:14px;color:var(--muted);font-size:12px}
 .ai-spinner{width:18px;height:18px;border:2px solid var(--bdr);border-top-color:var(--blue2);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
@@ -2399,8 +2425,8 @@ function renderPortfolioAssistantPanel(a) {
     : a.healthScore >= 45 ? "var(--amber)"
     : "var(--red)";
   const unclassified = a.unclassifiedAllocation || null;
-  const reviewActions = a.priorityActions.filter(x => ["REVIEW_EXIT","REVIEW_SIZE","WATCH_RISK"].includes(x.action)).slice(0, 5);
-  const addActions = a.priorityActions.filter(x => ["CONSIDER_ADD","BOOK_PARTIAL"].includes(x.action)).slice(0, 4);
+  const reviewActions = a.priorityActions.filter(x => ["REVIEW_EXIT","REVIEW_SIZE","WATCH_RISK"].includes(x.action)).slice(0, 4);
+  const addActions = a.priorityActions.filter(x => ["CONSIDER_ADD","BOOK_PARTIAL"].includes(x.action)).slice(0, 3);
   const weakLosers = a.holdings.filter(h => h.flags.includes("loss_with_weak_signals")).sort((x,y) => x.pnlPct - y.pnlPct);
   const topWeight = [...a.holdings].sort((x,y) => y.weight - x.weight)[0];
   const actionHeadline = reviewActions.length
@@ -2409,7 +2435,7 @@ function renderPortfolioAssistantPanel(a) {
       ? `No urgent exits. ${addActions.length} position${addActions.length===1?"":"s"} deserve follow-up.`
       : "No urgent action from current rule checks.";
 
-  const actionText = x => {
+  const actionParts = x => {
     const label = {
       REVIEW_EXIT: "Review exit",
       REVIEW_SIZE: "Check position size",
@@ -2418,55 +2444,55 @@ function renderPortfolioAssistantPanel(a) {
       BOOK_PARTIAL: "Book partial profit",
       WAIT: "Wait"
     }[x.action] || x.action.replace(/_/g, " ").toLowerCase();
-    return `${x.sym}: ${label} - ${x.reason}`;
+    return { label, title: `${x.sym}: ${label}`, reason: x.reason };
   };
-  const listHTML = (items, empty, icon) => items.length
-    ? items.map(x => `<div class="insight-row" style="margin-bottom:6px"><span class="insight-icon">${icon}</span><span>${esc(typeof x === "string" ? x : actionText(x))}</span></div>`).join("")
-    : `<div class="insight-row" style="margin-bottom:6px"><span class="insight-icon">-</span><span>${empty}</span></div>`;
+  const actionRows = (items, empty, kind) => items.length
+    ? items.map(x => {
+        const p = actionParts(x);
+        const chip = kind === "good" ? "pa-chip-good" : x.action === "WATCH_RISK" || x.action === "REVIEW_SIZE" ? "pa-chip-watch" : "pa-chip-risk";
+        return `<div class="pa-action-row"><span class="pa-chip ${chip}">${esc(p.label)}</span><div><div class="pa-action-main">${esc(p.title)}</div><div class="pa-action-sub">${esc(p.reason)}</div></div></div>`;
+      }).join("")
+    : `<div class="pa-action-row"><span class="pa-chip pa-chip-good">Clear</span><div><div class="pa-action-main">${esc(empty)}</div><div class="pa-action-sub">No rule triggered in this group.</div></div></div>`;
   const metricHTML = (label, value, sub, color = "var(--txt)") => `
-    <div style="background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--r2);padding:10px 12px">
-      <div style="font-size:9px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.07em">${label}</div>
-      <div style="font-size:18px;font-weight:800;font-family:var(--mono);color:${color};line-height:1.2;margin-top:4px">${value}</div>
-      <div style="font-size:10px;color:var(--muted);margin-top:3px;line-height:1.35">${esc(sub)}</div>
+    <div class="pa-kpi">
+      <div class="pa-kpi-l">${label}</div>
+      <div class="pa-kpi-v" style="color:${color}">${value}</div>
+      <div class="pa-kpi-s">${esc(sub)}</div>
     </div>`;
 
   return `
-  <div class="analysis-box" style="margin-bottom:14px;padding:16px 18px;border-left:4px solid ${scoreClr}">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:12px">
+  <div class="pa-summary" style="border-left-color:${scoreClr}">
+    <div class="pa-summary-head">
       <div>
-        <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.10em;margin-bottom:5px">Portfolio Assistant</div>
-        <div style="font-size:15px;font-weight:800;color:var(--txt);margin-bottom:3px">${esc(actionHeadline)}</div>
-        <div style="font-size:12px;line-height:1.6;color:var(--muted)">Based on position size, P&L, trend, and technical signals. Click any Recommendation badge below for stock-level detail.</div>
+        <div class="pa-eyebrow">Portfolio Assistant</div>
+        <div class="pa-headline">${esc(actionHeadline)}</div>
+        <div class="pa-help">Rule-based triage from position size, P&L, trend, and signal strength. Use the Recommendation badge in holdings for stock-level detail.</div>
       </div>
-      <div style="text-align:right;min-width:120px">
-        <div style="font-size:28px;font-weight:800;font-family:var(--mono);color:${scoreClr};line-height:1">${a.healthScore}</div>
-        <div style="font-size:10px;font-weight:700;color:${scoreClr};text-transform:uppercase;letter-spacing:.08em;margin-top:4px">${a.healthLabel}</div>
+      <div class="pa-score">
+        <div class="pa-score-n" style="color:${scoreClr}">${a.healthScore}</div>
+        <div class="pa-score-l" style="color:${scoreClr}">${a.healthLabel}</div>
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px">
+    <div class="pa-kpis">
       ${metricHTML("Review First", reviewActions.length, weakLosers[0] ? `Worst: ${weakLosers[0].sym} ${weakLosers[0].pnlPct.toFixed(1)}%` : "No weak-loss cluster", reviewActions.length ? "var(--red)" : "var(--green)")}
       ${metricHTML("Win Rate", `${a.winners}/${a.holdingsCount}`, `${Math.round(a.winners/Math.max(1,a.holdingsCount)*100)}% holdings in profit`, a.winners >= a.holdingsCount/2 ? "var(--green)" : "var(--amber)")}
       ${metricHTML("Top Weight", topWeight ? `${topWeight.weight.toFixed(1)}%` : "-", topWeight ? topWeight.sym : "No holdings", topWeight?.weight >= 30 ? "var(--red)" : topWeight?.weight >= 20 ? "var(--amber)" : "var(--txt)")}
       ${metricHTML("Potential Adds", addActions.length, addActions[0]?.sym || "None from rules", addActions.length ? "var(--green)" : "var(--muted)")}
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px">
+    <div class="pa-action-grid">
       <div>
         <div class="ab-section-hdr">Act First</div>
-        ${listHTML(reviewActions, "No urgent sell/reduce action right now.", "->")}
-      </div>
-      <div>
-        <div class="ab-section-hdr">Risk Notes</div>
-        ${listHTML(a.risks.slice(0, 4), "No major rule-based risks detected.", "!")}
+        <div class="pa-action-list">${actionRows(reviewActions, "No urgent sell/reduce action right now.", "risk")}</div>
       </div>
       <div>
         <div class="ab-section-hdr">Follow-Up</div>
-        ${listHTML(addActions, "No add/profit-booking candidates from current rules.", "+")}
+        <div class="pa-action-list">${actionRows(addActions, "No add/profit-booking candidates.", "good")}</div>
       </div>
     </div>
       ${unclassified ? `
-        <div style="margin-top:10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">
+        <div class="pa-muted-note">
           <span>Sector metadata missing for ${unclassified.holdings.length} holding(s), ${unclassified.weight.toFixed(1)}% of capital.</span>
           <button class="btn" style="font-size:10px;padding:3px 9px" onclick="refreshSectorMetadata()">Refresh metadata</button>
         </div>` : ""}
