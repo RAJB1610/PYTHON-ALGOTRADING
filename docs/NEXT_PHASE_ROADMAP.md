@@ -99,6 +99,8 @@ Objective: turn the portfolio tab into a rule-based portfolio health system, wit
 - [ ] Add Nifty/Sensex benchmark comparison.
 - [ ] Add persistent portfolio snapshots.
 - [ ] Improve position-level recommendations.
+- [x] Add shared AI provider client for Anthropic and OpenAI-compatible endpoints.
+- [x] Refactor AI endpoints to use server-side provider configuration.
 - [ ] Improve trade history analysis:
   - [ ] holding period buckets
   - [ ] average winner duration
@@ -183,6 +185,11 @@ Scope: small, production-focused, and low-risk.
 - `KITE_API_KEY`
 - `KITE_API_SECRET`
 - `ANTHROPIC_API_KEY`
+- `ANTHROPIC_MODEL`
+- `AI_PROVIDER`
+- `AI_BASE_URL`
+- `AI_API_KEY`
+- `AI_MODEL`
 - `ADMIN_SYNC_TOKEN`
 
 ## Deployment Notes

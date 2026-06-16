@@ -21,10 +21,38 @@ SUPABASE_SERVICE_KEY=
 KITE_API_KEY=
 KITE_API_SECRET=
 ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=
+AI_PROVIDER=
+AI_BASE_URL=
+AI_API_KEY=
+AI_MODEL=
 ADMIN_SYNC_TOKEN=
 ```
 
 Do not commit `.env` files or real credentials.
+
+## AI Provider Configuration
+
+The app's AI functions use server-side Netlify environment variables. Keys are never exposed to browser JavaScript.
+
+Default Anthropic mode:
+
+```text
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=your_key
+ANTHROPIC_MODEL=claude-haiku-4-5-20251001
+```
+
+OpenAI-compatible mode:
+
+```text
+AI_PROVIDER=openai_compatible
+AI_BASE_URL=https://provider.example.com/v1
+AI_API_KEY=your_key
+AI_MODEL=provider-model-name
+```
+
+Use OpenAI-compatible mode for providers that expose `/chat/completions`. Temporary or free keys can be used by setting Netlify env vars, but do not hardcode public keys into the repository.
 
 ## Public Functions
 
