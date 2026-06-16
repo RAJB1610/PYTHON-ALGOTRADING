@@ -54,6 +54,29 @@ AI_MODEL=provider-model-name
 
 Use OpenAI-compatible mode for providers that expose `/chat/completions`. Temporary or free keys can be used by setting Netlify env vars, but do not hardcode public keys into the repository.
 
+RelayFreeLLM mode:
+
+Deploy RelayFreeLLM as a separate long-running service, then point this Netlify app at its OpenAI-compatible endpoint.
+
+```text
+AI_PROVIDER=openai_compatible
+AI_BASE_URL=https://your-relay-domain.com/v1
+AI_API_KEY=relay-free
+AI_MODEL=meta-model
+```
+
+The relay service should hold provider keys such as `GEMINI_APIKEY`, `GROQ_APIKEY`, `MISTRAL_APIKEY`, and `NVIDIA_APIKEY`. Do not run the relay from Netlify Functions; use Railway, Render, Fly.io, a VPS, or a local machine for testing.
+
+## AI Health Check
+
+Use this endpoint after changing AI env vars:
+
+```text
+/.netlify/functions/ai-status
+```
+
+It reports provider, model, base URL, configuration state, and a small live completion test. It never returns API keys.
+
 ## Public Functions
 
 These functions are intended to be callable by the frontend.
@@ -69,6 +92,7 @@ These functions are intended to be callable by the frontend.
 - `analyze`
 - `analyze-history`
 - `data-status`
+- `ai-status`
 
 ## Admin-Protected Functions
 

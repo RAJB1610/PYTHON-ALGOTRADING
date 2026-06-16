@@ -101,6 +101,8 @@ Objective: turn the portfolio tab into a rule-based portfolio health system, wit
 - [ ] Improve position-level recommendations.
 - [x] Add shared AI provider client for Anthropic and OpenAI-compatible endpoints.
 - [x] Refactor AI endpoints to use server-side provider configuration.
+- [x] Add AI provider health-check endpoint.
+- [x] Document RelayFreeLLM as an OpenAI-compatible relay option.
 - [ ] Improve trade history analysis:
   - [ ] holding period buckets
   - [ ] average winner duration
