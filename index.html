@@ -557,6 +557,7 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
     <!-- Portfolio content (shown after upload) -->
     <div id="portContent">
       <div class="port-summary" id="portSummary"></div>
+      <div id="portfolioAssistant"></div>
 
       <div class="port-toolbar">
         <span class="port-toolbar-left">Holdings</span>
@@ -1817,6 +1818,7 @@ function renderPortfolio() {
     <div class="ps-card"><div class="ps-n" style="color:${pnlPct>=0?"var(--green)":"var(--red)"}">${pnlPct>=0?"+":""}${pnlPct.toFixed(2)}%</div><div class="ps-l">Overall Return</div></div>
     <div class="ps-card"><div class="ps-n">${portfolio.length}</div><div class="ps-l">Holdings</div></div>
     <div class="ps-card"><div class="ps-n" style="color:var(--green)">${winners}</div><div class="ps-l">Winners</div></div>`;
+  renderPortfolioAssistant();
 
   const portTh = document.getElementById("portThSym");
   if (portTh) portTh.textContent = portSortC === "sym" ? `Stock ${portSortD === 1 ? "↑" : "↓"}` : "Stock ↕";
@@ -2060,10 +2062,19 @@ function renderPortfolioAssistantPanel(a) {
   </div>`;
 }
 
+function renderPortfolioAssistant() {
+  const el = document.getElementById("portfolioAssistant");
+  if (!el) return;
+  if (!portfolio.length) {
+    el.innerHTML = "";
+    return;
+  }
+  el.innerHTML = renderPortfolioAssistantPanel(analyzePortfolioAssistant());
+}
+
 function renderRuleAnalysis(invested, current, pnl, pnlPct) {
   const box = document.getElementById("ruleAnalysis");
   if (!portfolio.length) { box.innerHTML = ""; return; }
-  const assistant = analyzePortfolioAssistant();
 
   // ── Metrics ───────────────────────────────────────────────────────────────
   const rows = portfolio.map(h => {
@@ -2085,7 +2096,7 @@ function renderRuleAnalysis(invested, current, pnl, pnlPct) {
   // Weight badge colour
   const wtClr = w => w >= 30 ? "#E24B4A" : w >= 20 ? "#EF9F27" : w >= 10 ? "#378ADD" : "#1D9E75";
 
-  box.innerHTML = `${renderPortfolioAssistantPanel(assistant)}
+  box.innerHTML = `
   <!-- ── Overall Portfolio Health ─────────────────────────────────── -->
   <div style="margin-bottom:18px">
     <div style="font-size:10px;font-weight:700;letter-spacing:.10em;color:var(--muted);text-transform:uppercase;margin-bottom:10px">Overall Portfolio Health</div>
