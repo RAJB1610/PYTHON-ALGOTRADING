@@ -353,8 +353,14 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
 .pa-review-title{font-size:13px;font-weight:800;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pa-review-meta{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:3px;line-height:1.45}
 .pa-review-reason{font-size:11px;color:var(--muted);line-height:1.45;margin-top:5px}
+.pa-scenario-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.pa-scenario-tabs .btn.active{background:var(--txt);border-color:var(--txt);color:#fff}
+.pa-rebalance-row{display:grid;grid-template-columns:minmax(0,1fr) 82px 82px 86px;gap:8px;align-items:center;border-top:1px solid var(--bdr);padding:9px 0;font-size:12px}
+.pa-rebalance-row:first-child{border-top:0}
+.pa-rebalance-head{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.pa-rebalance-num{font-family:var(--mono);font-size:11px;text-align:right}
 @media(max-width:800px){.pa-summary-head{grid-template-columns:1fr}.pa-score{text-align:left}.pa-kpis{grid-template-columns:repeat(2,1fr)}.pa-action-grid{grid-template-columns:1fr}}
-@media(max-width:500px){.pa-kpis{grid-template-columns:1fr}.pa-action-row{grid-template-columns:1fr}}
+@media(max-width:500px){.pa-kpis{grid-template-columns:1fr}.pa-action-row{grid-template-columns:1fr}.pa-rebalance-row{grid-template-columns:1fr 1fr}.pa-rebalance-head{display:none}}
 .ai-output{font-size:12px;line-height:1.8;color:var(--txt);white-space:pre-wrap;background:var(--bg3);border-radius:var(--r2);padding:12px 14px;border-left:3px solid var(--blue2)}
 .ai-loading{display:flex;align-items:center;gap:10px;padding:14px;color:var(--muted);font-size:12px}
 .ai-spinner{width:18px;height:18px;border:2px solid var(--bdr);border-top-color:var(--blue2);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
@@ -2498,6 +2504,7 @@ function renderPortfolioAssistantPanel(a) {
       </div>
     </div>
     <div class="pa-review-btn">
+      <button class="btn" style="font-size:11px;padding:5px 12px" onclick="openRebalancePlanner()">What-if Rebalance</button>
       <button class="btn btn-green" style="font-size:11px;padding:5px 12px" onclick="openPortfolioReviewDetails()">Review Details</button>
     </div>
       ${unclassified ? `
@@ -2598,6 +2605,161 @@ function openPortfolioReviewDetails() {
   document.getElementById("paOverlay").classList.add("open");
   document.getElementById("portfolioAssistantPanel").classList.add("open");
   document.body.style.overflow = "hidden";
+}
+
+let _rebalanceScenario = "trimWeak25";
+
+function openRebalancePlanner(scenario = _rebalanceScenario) {
+  _rebalanceScenario = scenario;
+  const content = document.getElementById("paContent");
+  if (!content) return;
+  const result = simulateRebalanceScenario(scenario);
+  const scenarioLabels = {
+    trimWeak25: "Trim weak 25%",
+    trimWeak50: "Trim weak 50%",
+    exitWeak: "Exit weak",
+    bookProfit: "Book profit",
+    cap15: "Cap at 15%",
+    cap20: "Cap at 20%"
+  };
+  const scenarioHelp = {
+    trimWeak25: "Reduce holdings that are losing money with weak signals by 25%.",
+    trimWeak50: "Reduce holdings that are losing money with weak signals by 50%.",
+    exitWeak: "Fully exit holdings where loss is paired with weak signals.",
+    bookProfit: "Book 40% from large winners whose signals are fading.",
+    cap15: "Trim any holding above 15% portfolio exposure down to that cap.",
+    cap20: "Trim any holding above 20% portfolio exposure down to that cap."
+  };
+  const tabs = Object.entries(scenarioLabels).map(([key, label]) =>
+    `<button class="btn ${key===scenario?"active":""}" style="font-size:10px;padding:4px 9px" onclick="openRebalancePlanner('${key}')">${label}</button>`
+  ).join("");
+  const rows = result.rows.length ? result.rows.map(r => `
+    <div class="pa-rebalance-row">
+      <div>
+        <div class="pa-review-title">${esc(r.sym)}</div>
+        <div class="pa-review-meta">${esc(r.reason)}</div>
+      </div>
+      <div class="pa-rebalance-num">${r.sellPct.toFixed(0)}%</div>
+      <div class="pa-rebalance-num">₹${fmtBig(r.sellValue)}</div>
+      <div class="pa-rebalance-num">${r.beforeWeight.toFixed(1)}% → ${r.afterWeight.toFixed(1)}%</div>
+    </div>`).join("") : `
+    <div class="pa-review-row">
+      <div>
+        <div class="pa-review-title">No holdings affected</div>
+        <div class="pa-review-reason">This scenario does not trigger any simulated sale with current rules.</div>
+      </div>
+    </div>`;
+
+  content.innerHTML = `
+    <div class="pa-hdr">
+      <div style="flex:1;min-width:0">
+        <div class="pa-title">What-if Rebalance</div>
+        <div class="pa-sub">Planning only · no holdings are changed · prices use current loaded CMP</div>
+      </div>
+      <button class="pa-close" onclick="closePortfolioAssistantDrawer()">✕</button>
+    </div>
+    <div class="pa-body">
+      <div class="pa-section">
+        <div class="pa-section-title">Scenario</div>
+        <div class="pa-scenario-tabs">${tabs}</div>
+        <div class="pa-reason">${esc(scenarioHelp[scenario])}</div>
+      </div>
+      <div class="pa-grid">
+        ${paMetric("Cash Released", "₹" + fmtBig(result.cashReleased), "var(--green)")}
+        ${paMetric("Exposure Left", "₹" + fmtBig(result.afterExposure), "var(--txt)")}
+        ${paMetric("Top Weight", `${result.beforeTopWeight.toFixed(1)}% → ${result.afterTopWeight.toFixed(1)}%`, result.afterTopWeight < result.beforeTopWeight ? "var(--green)" : "var(--txt)")}
+        ${paMetric("Positions Touched", String(result.rows.length), result.rows.length ? "var(--amber)" : "var(--muted)")}
+      </div>
+      <div class="pa-section">
+        <div class="pa-section-title">Simulated Orders</div>
+        <div class="pa-rebalance-row" style="padding-top:0">
+          <div class="pa-rebalance-head">Holding</div>
+          <div class="pa-rebalance-head" style="text-align:right">Sell</div>
+          <div class="pa-rebalance-head" style="text-align:right">Cash</div>
+          <div class="pa-rebalance-head" style="text-align:right">Weight</div>
+        </div>
+        ${rows}
+      </div>
+      <div class="pa-section">
+        <div class="pa-section-title">Notes</div>
+        <div class="pa-list">
+          <div class="pa-item"><span class="pa-dot"></span><span>This is not trade execution or advice; it is a portfolio planning view.</span></div>
+          <div class="pa-item"><span class="pa-dot"></span><span>Taxes, brokerage, slippage, and order liquidity are not included.</span></div>
+          <div class="pa-item"><span class="pa-dot"></span><span>Use Review Details or the stock drawer before taking any action.</span></div>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById("paOverlay").classList.add("open");
+  document.getElementById("portfolioAssistantPanel").classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+
+function simulateRebalanceScenario(scenario) {
+  const holdings = portfolio.map(h => {
+    const live = liveData[h.sym] || null;
+    const cmp = live?.cmp || h.cmp || h.avgPrice;
+    const current = h.qty * cmp;
+    const pnlPct = h.avgPrice ? (cmp - h.avgPrice) / h.avgPrice * 100 : 0;
+    const action = getAssistantAction(h, live);
+    return { h, live, cmp, current, pnlPct, action };
+  });
+  const total = holdings.reduce((s, x) => s + x.current, 0);
+  const cap = scenario === "cap15" ? 15 : scenario === "cap20" ? 20 : null;
+  const rows = [];
+
+  holdings.forEach(x => {
+    const weight = total ? x.current / total * 100 : 0;
+    let sellPct = 0;
+    let reason = "";
+
+    if (scenario === "trimWeak25" && x.action.flags.some(f => f.label === "Weak loss")) {
+      sellPct = 25; reason = "Loss is paired with weak signals.";
+    } else if (scenario === "trimWeak50" && x.action.flags.some(f => f.label === "Weak loss")) {
+      sellPct = 50; reason = "Stronger trim for weak-loss positions.";
+    } else if (scenario === "exitWeak" && x.action.flags.some(f => f.label === "Weak loss")) {
+      sellPct = 100; reason = "Full exit simulation for weak-loss positions.";
+    } else if (scenario === "bookProfit" && x.action.flags.some(f => f.label === "Protect gain")) {
+      sellPct = 40; reason = "Partial profit booking on large winner with fading signals.";
+    } else if (cap && weight > cap) {
+      sellPct = Math.min(100, ((weight - cap) / weight) * 100);
+      reason = `Trim position to approximately ${cap}% exposure.`;
+    }
+
+    if (sellPct > 0) {
+      rows.push({
+        sym: x.h.sym,
+        current: x.current,
+        sellPct,
+        sellValue: x.current * sellPct / 100,
+        beforeWeight: weight,
+        afterValue: x.current * (1 - sellPct / 100),
+        reason
+      });
+    }
+  });
+
+  const cashReleased = rows.reduce((s, r) => s + r.sellValue, 0);
+  const afterExposure = Math.max(0, total - cashReleased);
+  const rowMap = new Map(rows.map(r => [r.sym, r]));
+  const beforeTopWeight = holdings.reduce((m, x) => Math.max(m, total ? x.current / total * 100 : 0), 0);
+  const afterTopWeight = holdings.reduce((m, x) => {
+    const sold = rowMap.get(x.h.sym);
+    const value = sold ? sold.afterValue : x.current;
+    return Math.max(m, afterExposure ? value / afterExposure * 100 : 0);
+  }, 0);
+  rows.forEach(r => {
+    r.afterWeight = afterExposure ? r.afterValue / afterExposure * 100 : 0;
+  });
+
+  return {
+    rows: rows.sort((a,b) => b.sellValue - a.sellValue),
+    total,
+    cashReleased,
+    afterExposure,
+    beforeTopWeight,
+    afterTopWeight
+  };
 }
 
 function renderRuleAnalysis(invested, current, pnl, pnlPct) {
