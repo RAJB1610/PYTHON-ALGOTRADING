@@ -2431,18 +2431,37 @@ function normalizeSectorLabel(label) {
   return s.split("/")[0].trim() || "Unclassified";
 }
 
+function getReviewQueue(a, limit = Infinity) {
+  return [...(a.holdings || [])]
+    .map(h => {
+      let priority = 0;
+      if (h.flags.includes("loss_with_weak_signals")) priority += 60;
+      if (h.flags.includes("deep_loss")) priority += 30;
+      if (h.flags.includes("downtrend")) priority += 20;
+      if (h.flags.includes("concentration")) priority += 25;
+      if (h.flags.includes("profit_protection")) priority += 15;
+      if (h.flags.includes("strong_setup")) priority += 10;
+      priority += Math.max(0, -h.pnlPct);
+      return { ...h, priority };
+    })
+    .filter(h => h.priority > 0 || h.action !== "HOLD")
+    .sort((x,y) => y.priority - x.priority)
+    .slice(0, limit);
+}
+
 function renderPortfolioAssistantPanel(a) {
   const scoreClr = a.healthScore >= 80 ? "var(--green)"
     : a.healthScore >= 65 ? "var(--blue)"
     : a.healthScore >= 45 ? "var(--amber)"
     : "var(--red)";
   const unclassified = a.unclassifiedAllocation || null;
-  const reviewActions = a.priorityActions.filter(x => ["REVIEW_EXIT","REVIEW_SIZE","WATCH_RISK"].includes(x.action)).slice(0, 4);
+  const reviewQueue = getReviewQueue(a);
+  const reviewActions = reviewQueue.slice(0, 4);
   const addActions = a.priorityActions.filter(x => ["CONSIDER_ADD","BOOK_PARTIAL"].includes(x.action)).slice(0, 3);
   const weakLosers = a.holdings.filter(h => h.flags.includes("loss_with_weak_signals")).sort((x,y) => x.pnlPct - y.pnlPct);
   const topWeight = [...a.holdings].sort((x,y) => y.weight - x.weight)[0];
-  const actionHeadline = reviewActions.length
-    ? `Review ${reviewActions.length} weak position${reviewActions.length===1?"":"s"} before adding fresh capital.`
+  const actionHeadline = reviewQueue.length
+    ? `Review ${reviewQueue.length} flagged position${reviewQueue.length===1?"":"s"} before adding fresh capital.`
     : addActions.length
       ? `No urgent exits. ${addActions.length} position${addActions.length===1?"":"s"} deserve follow-up.`
       : "No urgent action from current rule checks.";
@@ -2454,6 +2473,10 @@ function renderPortfolioAssistantPanel(a) {
       WATCH_RISK: "Watch risk",
       CONSIDER_ADD: "Consider add",
       BOOK_PARTIAL: "Book partial profit",
+      REDUCE: "Review exit",
+      EXIT: "Exit",
+      ADD: "Consider add",
+      HOLD_PLUS: "Hold+",
       WAIT: "Wait"
     }[x.action] || x.action.replace(/_/g, " ").toLowerCase();
     return { label, title: `${x.sym}: ${label}`, reason: x.reason };
@@ -2487,7 +2510,7 @@ function renderPortfolioAssistantPanel(a) {
     </div>
 
     <div class="pa-kpis">
-      ${metricHTML("Review First", reviewActions.length, weakLosers[0] ? `Worst: ${weakLosers[0].sym} ${weakLosers[0].pnlPct.toFixed(1)}%` : "No weak-loss cluster", reviewActions.length ? "var(--red)" : "var(--green)")}
+      ${metricHTML("Review First", reviewQueue.length, weakLosers[0] ? `Worst: ${weakLosers[0].sym} ${weakLosers[0].pnlPct.toFixed(1)}%` : "No weak-loss cluster", reviewQueue.length ? "var(--red)" : "var(--green)")}
       ${metricHTML("Win Rate", `${a.winners}/${a.holdingsCount}`, `${Math.round(a.winners/Math.max(1,a.holdingsCount)*100)}% holdings in profit`, a.winners >= a.holdingsCount/2 ? "var(--green)" : "var(--amber)")}
       ${metricHTML("Top Weight", topWeight ? `${topWeight.weight.toFixed(1)}%` : "-", topWeight ? topWeight.sym : "No holdings", topWeight?.weight >= 30 ? "var(--red)" : topWeight?.weight >= 20 ? "var(--amber)" : "var(--txt)")}
       ${metricHTML("Potential Adds", addActions.length, addActions[0]?.sym || "None from rules", addActions.length ? "var(--green)" : "var(--muted)")}
@@ -2533,21 +2556,7 @@ function openPortfolioReviewDetails() {
   const a = analyzePortfolioAssistant();
   const content = document.getElementById("paContent");
   if (!content) return;
-  const ranked = [...a.holdings]
-    .map(h => {
-      let priority = 0;
-      if (h.flags.includes("loss_with_weak_signals")) priority += 60;
-      if (h.flags.includes("deep_loss")) priority += 30;
-      if (h.flags.includes("downtrend")) priority += 20;
-      if (h.flags.includes("concentration")) priority += 25;
-      if (h.flags.includes("profit_protection")) priority += 15;
-      if (h.flags.includes("strong_setup")) priority += 10;
-      priority += Math.max(0, -h.pnlPct);
-      return { ...h, priority };
-    })
-    .filter(h => h.priority > 0 || h.action !== "HOLD")
-    .sort((x,y) => y.priority - x.priority)
-    .slice(0, 20);
+  const ranked = getReviewQueue(a, 60);
 
   const actionChip = h => {
     const cls = h.action === "ADD" || h.action === "HOLD_PLUS" ? "pa-chip-good"
