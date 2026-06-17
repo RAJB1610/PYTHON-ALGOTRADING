@@ -344,6 +344,11 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
 .pa-chip-risk{background:#FDEAEA;color:var(--red);border:1px solid #F5BABA}
 .pa-chip-watch{background:#FAEEDA;color:var(--amber);border:1px solid #E8C47A}
 .pa-chip-good{background:#D6F0E8;color:var(--green);border:1px solid #A0D9C5}
+.pa-status{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;border-radius:10px;padding:2px 7px;font-family:var(--mono);white-space:nowrap;background:var(--bg3);color:var(--muted);border:1px solid var(--bdr)}
+.pa-status-plan-trim,.pa-status-plan-exit{background:#FAEEDA;color:var(--amber);border-color:#E8C47A}
+.pa-status-done{background:#D6F0E8;color:var(--green);border-color:#A0D9C5}
+.pa-status-ignore{background:var(--bg4);color:var(--muted);border-color:var(--bdr2)}
+.pa-status-select{background:var(--bg3);border:1px solid var(--bdr);border-radius:6px;padding:4px 7px;font-size:10px;color:var(--txt);font-family:var(--font);outline:none;max-width:130px}
 .pa-action-main{font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pa-action-sub{font-size:10px;color:var(--muted);margin-top:1px}
 .pa-muted-note{margin-top:10px;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--bdr);padding-top:8px}
@@ -1450,11 +1455,14 @@ function renderFund() {
 // PORTFOLIO — State & Storage
 // ════════════════════════════════════════════════════════════════════════════
 let portfolio = [];
+let reviewStatus = {};
 
 function savePort()  { try { localStorage.setItem("ts_port", JSON.stringify(portfolio)); } catch(e) {} }
 function loadPort()  { try { const s = localStorage.getItem("ts_port"); if (s) portfolio = JSON.parse(s); } catch(e) {} }
 function saveStockMeta() { try { localStorage.setItem("ts_stock_meta", JSON.stringify(stockMeta)); } catch(e) {} }
 function loadStockMeta() { try { const s = localStorage.getItem("ts_stock_meta"); if (s) stockMeta = JSON.parse(s) || {}; } catch(e) { stockMeta = {}; } }
+function saveReviewStatus() { try { localStorage.setItem("ts_review_status", JSON.stringify(reviewStatus)); } catch(e) {} }
+function loadReviewStatus() { try { const s = localStorage.getItem("ts_review_status"); if (s) reviewStatus = JSON.parse(s) || {}; } catch(e) { reviewStatus = {}; } }
 
 // ════════════════════════════════════════════════════════════════════════════
 // WATCHLIST
@@ -2114,23 +2122,66 @@ function renderAssistantActionCell(action, sym) {
   const flags = action.flags.length
     ? `<div class="assist-flags">${action.flags.map(f => `<span class="assist-flag ${f.kind}">${esc(f.label)}</span>`).join("")}</div>`
     : "";
+  const status = getReviewStatus(sym);
+  const statusChip = status !== "to_review" ? `<span class="${reviewStatusClass(status)}">${esc(reviewStatusLabel(status))}</span>` : "";
   return `
     <div class="assist-action-cell">
       <button class="assist-action-btn" onclick="event.stopPropagation();openPortfolioAssistantDrawer('${jsStr(sym)}')" title="Open assistant detail">
         <span class="${action.cls}" title="${esc(action.reason)}">${esc(action.label)}</span>
       </button>
       <div class="assist-reason">${esc(action.reason)}</div>
+      ${statusChip}
       ${flags}
     </div>`;
 }
 
 let _paSym = null;
+let _paMode = null;
+
+const REVIEW_STATUS_OPTIONS = [
+  ["to_review", "To Review"],
+  ["watching", "Watching"],
+  ["plan_trim", "Plan Trim"],
+  ["plan_exit", "Plan Exit"],
+  ["ignore", "Ignore"],
+  ["done", "Done"],
+];
+
+function getReviewStatus(sym) {
+  return reviewStatus[sym] || "to_review";
+}
+
+function reviewStatusLabel(status) {
+  return (REVIEW_STATUS_OPTIONS.find(x => x[0] === status) || REVIEW_STATUS_OPTIONS[0])[1];
+}
+
+function reviewStatusClass(status) {
+  return `pa-status pa-status-${String(status || "to_review").replace(/_/g, "-")}`;
+}
+
+function reviewStatusSelect(sym) {
+  const cur = getReviewStatus(sym);
+  return `<select class="pa-status-select" onchange="setReviewStatus('${jsStr(sym)}', this.value)">
+    ${REVIEW_STATUS_OPTIONS.map(([v,l]) => `<option value="${v}" ${v===cur?"selected":""}>${l}</option>`).join("")}
+  </select>`;
+}
+
+function setReviewStatus(sym, status) {
+  if (!sym) return;
+  if (status === "to_review") delete reviewStatus[sym];
+  else reviewStatus[sym] = status;
+  saveReviewStatus();
+  renderPortfolio();
+  renderPortfolioAssistant();
+  if (_paMode === "review") openPortfolioReviewDetails();
+}
 
 function jsStr(s) {
   return String(s || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
 function openPortfolioAssistantDrawer(sym) {
+  _paMode = "stock";
   _paSym = sym;
   const h = portfolio.find(x => x.sym === sym);
   const content = document.getElementById("paContent");
@@ -2167,7 +2218,10 @@ function openPortfolioAssistantDrawer(sym) {
       <div class="pa-action">
         <div class="pa-action-top">
           <div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.07em">Assistant Action</div>
-          <span class="${action.cls}">${esc(action.label)}</span>
+          <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+            <span class="${action.cls}">${esc(action.label)}</span>
+            ${reviewStatusSelect(h.sym)}
+          </div>
         </div>
         <div class="pa-reason">${esc(action.reason)}</div>
         <div style="margin-top:9px">${flags}</div>
@@ -2220,6 +2274,7 @@ function closePortfolioAssistantDrawer() {
   document.getElementById("paOverlay")?.classList.remove("open");
   document.getElementById("portfolioAssistantPanel")?.classList.remove("open");
   document.body.style.overflow = "";
+  _paMode = null;
 }
 
 function paMetric(label, value, color = "var(--txt)") {
@@ -2553,6 +2608,7 @@ function renderPortfolioAssistant() {
 }
 
 function openPortfolioReviewDetails() {
+  _paMode = "review";
   const a = analyzePortfolioAssistant();
   const content = document.getElementById("paContent");
   if (!content) return;
@@ -2584,13 +2640,17 @@ function openPortfolioReviewDetails() {
                 <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
                   <div class="pa-review-title">${esc(h.sym)}</div>
                   ${actionChip(h)}
+                  <span class="${reviewStatusClass(getReviewStatus(h.sym))}">${esc(reviewStatusLabel(getReviewStatus(h.sym)))}</span>
                 </div>
                 <div class="pa-review-meta">
                   P&L ${h.pnlPct>=0?"+":""}${h.pnlPct.toFixed(1)}% · Weight ${h.weight.toFixed(1)}% · ${esc(h.maTrend || "trend pending")} · ${h.bullCount == null ? "signals pending" : h.bullCount + "/5 signals"}
                 </div>
                 <div class="pa-review-reason">${esc(h.reason)}</div>
               </div>
-              <button class="btn" style="font-size:10px;padding:4px 10px" onclick="openPortfolioAssistantDrawer('${jsStr(h.sym)}')">Open</button>
+              <div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap">
+                ${reviewStatusSelect(h.sym)}
+                <button class="btn" style="font-size:10px;padding:4px 10px" onclick="openPortfolioAssistantDrawer('${jsStr(h.sym)}')">Open</button>
+              </div>
             </div>`).join("") : `
             <div class="pa-review-row">
               <div>
@@ -2619,6 +2679,7 @@ function openPortfolioReviewDetails() {
 let _rebalanceScenario = "trimWeak25";
 
 function openRebalancePlanner(scenario = _rebalanceScenario) {
+  _paMode = "rebalance";
   _rebalanceScenario = scenario;
   const content = document.getElementById("paContent");
   if (!content) return;
@@ -2627,6 +2688,7 @@ function openRebalancePlanner(scenario = _rebalanceScenario) {
     trimWeak25: "Trim weak 25%",
     trimWeak50: "Trim weak 50%",
     exitWeak: "Exit weak",
+    planned: "My plan",
     bookProfit: "Book profit",
     cap15: "Cap at 15%",
     cap20: "Cap at 20%"
@@ -2635,6 +2697,7 @@ function openRebalancePlanner(scenario = _rebalanceScenario) {
     trimWeak25: "Reduce holdings that are losing money with weak signals by 25%.",
     trimWeak50: "Reduce holdings that are losing money with weak signals by 50%.",
     exitWeak: "Fully exit holdings where loss is paired with weak signals.",
+    planned: "Use your saved Plan Trim and Plan Exit review statuses.",
     bookProfit: "Book 40% from large winners whose signals are fading.",
     cap15: "Trim any holding above 15% portfolio exposure down to that cap.",
     cap20: "Trim any holding above 20% portfolio exposure down to that cap."
@@ -2728,6 +2791,10 @@ function simulateRebalanceScenario(scenario) {
       sellPct = 50; reason = "Stronger trim for weak-loss positions.";
     } else if (scenario === "exitWeak" && x.action.flags.some(f => f.label === "Weak loss")) {
       sellPct = 100; reason = "Full exit simulation for weak-loss positions.";
+    } else if (scenario === "planned" && getReviewStatus(x.h.sym) === "plan_trim") {
+      sellPct = 50; reason = "Saved review status is Plan Trim.";
+    } else if (scenario === "planned" && getReviewStatus(x.h.sym) === "plan_exit") {
+      sellPct = 100; reason = "Saved review status is Plan Exit.";
     } else if (scenario === "bookProfit" && x.action.flags.some(f => f.label === "Protect gain")) {
       sellPct = 40; reason = "Partial profit booking on large winner with fading signals.";
     } else if (cap && weight > cap) {
@@ -4602,6 +4669,7 @@ loadDataStatus();
 setInterval(loadDataStatus, 5 * 60 * 1000);
 loadPort();
 loadStockMeta();
+loadReviewStatus();
 loadWatch();
 initSymList();
 buildAlphaBar("techAlpha",  "setTechLetter");
