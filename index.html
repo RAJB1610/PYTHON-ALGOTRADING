@@ -247,6 +247,20 @@ td { padding: 9px 10px; vertical-align: middle; }
 .sl-lbl { font-size: 11px; color: var(--muted); font-weight: 600; }
 .sl-val { font-size: 12px; font-weight: 700; color: var(--green); font-family: var(--mono); }
 .sl-row input[type=range] { width: 100%; accent-color: var(--green); cursor: pointer; }
+.fund-assistant{background:var(--bg2);border:1px solid var(--bdr);border-left:4px solid var(--blue);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.fund-assistant-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:9px}
+.fund-assistant-title{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.11em}
+.fund-assistant-note{font-size:10px;color:#52627D;font-weight:700}
+.fund-pills{display:flex;gap:6px;flex-wrap:wrap}
+.fund-pill{font-size:10px;font-family:var(--mono);font-weight:800;border:1px solid var(--bdr);border-radius:999px;padding:3px 8px;background:#F7F9FD;color:#334155}
+.fund-pill.good{background:#D6F0E8;color:var(--green);border-color:#A0D9C5}
+.fund-pill.warn{background:#FAEEDA;color:var(--amber);border-color:#E8C47A}
+.fund-pill.risk{background:#FDEAEA;color:var(--red);border-color:#F5BABA}
+.fund-assistant-grid{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:8px}
+.fund-tile{background:#F7F9FD;border:1px solid var(--bdr);border-radius:8px;padding:8px 10px;min-height:58px}
+.fund-tile-l{font-size:9px;font-weight:800;color:#384A67;text-transform:uppercase;letter-spacing:.07em}
+.fund-tile-v{font-size:13px;font-weight:800;color:var(--txt);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fund-tile-s{font-size:10px;color:#52627D;line-height:1.35;margin-top:2px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ── Footer ──────────────────────────────────────────────────────────────── */
 footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted); line-height: 1.8; border-top: 1px solid var(--bdr); }
@@ -398,7 +412,8 @@ select.mf-input{background:#fff;color:var(--txt);font-weight:700}
 .empty-port h3{font-size:15px;font-weight:700;color:var(--txt);margin-bottom:6px}
 
 @media(max-width: 800px) { .sl-grid { grid-template-columns: repeat(2, 1fr); } }
-@media(max-width: 500px) { .sl-grid { grid-template-columns: 1fr; } main { padding: 10px 8px; } }
+@media(max-width: 800px) { .fund-assistant-grid { grid-template-columns: repeat(2, 1fr); } }
+@media(max-width: 500px) { .sl-grid,.fund-assistant-grid { grid-template-columns: 1fr; } main { padding: 10px 8px; } }
 </style>
 </head>
 <body>
@@ -529,6 +544,7 @@ select.mf-input{background:#fff;color:var(--txt);font-weight:700}
     </div>
 
     <div class="summary" id="fundSummary"></div>
+    <div id="fundAssistant"></div>
     <div class="alpha-bar" id="fundAlpha"></div>
     <div class="tbl-wrap">
       <table>
@@ -1384,6 +1400,59 @@ function fundReScore() {
   renderFund();
 }
 
+function fundReasons(s, th) {
+  const reasons = [];
+  if (!s.hard.surv) reasons.push("surveillance risk");
+  if (!s.hard.profit) reasons.push("profit history weak");
+  if (!s.hard.promo) reasons.push("promoter below threshold");
+  if (s.soft.rev) reasons.push(`revenue +${s.rev}%`);
+  if (s.soft.profit) reasons.push(`profit +${s.profit}%`);
+  if (s.soft.roe) reasons.push(`ROE ${s.roe}%`);
+  if (s.soft.pe) reasons.push(`PE ${s.pe}x`);
+  if (s.sig.de) reasons.push(s.isNBFC ? "NBFC leverage ok" : "low debt");
+  if (s.sig.ma === true) reasons.push("above key MAs");
+  if (s.promoT === "declining") reasons.push("promoter declining");
+  return reasons.slice(0, 3).join(" · ") || "No standout factor";
+}
+
+function renderFundAssistant(scored, th, counts) {
+  const el = document.getElementById("fundAssistant");
+  if (!el) return;
+  const sorted = [...scored].sort((a,b) => b.sc - a.sc || (b.roe || 0) - (a.roe || 0));
+  const best = sorted.find(s => s.hardPass) || sorted[0];
+  const hardFails = scored.filter(s => !s.hardPass);
+  const risk = hardFails[0] || [...scored].sort((a,b) => a.sc - b.sc || a.promo - b.promo)[0];
+  const expensive = scored.filter(s => s.pe != null && s.pe > th.tPE).sort((a,b) => (b.pe || 0) - (a.pe || 0))[0];
+  const quality = scored.filter(s => s.hardPass && s.roe >= th.tROE && s.promoT !== "declining").length;
+  const tile = (label, value, sub, cls = "") => `
+    <div class="fund-tile ${cls}">
+      <div class="fund-tile-l">${esc(label)}</div>
+      <div class="fund-tile-v">${esc(value)}</div>
+      <div class="fund-tile-s">${esc(sub)}</div>
+    </div>`;
+
+  el.innerHTML = `
+    <div class="fund-assistant">
+      <div class="fund-assistant-head">
+        <div>
+          <div class="fund-assistant-title">Fundamental Assistant</div>
+          <div class="fund-assistant-note">Static quarterly screen · use thresholds to stress-test quality, valuation, and promoter risk.</div>
+        </div>
+        <div class="fund-pills">
+          <span class="fund-pill good">${counts.sb + counts.q} pass</span>
+          <span class="fund-pill warn">${counts.w} watch</span>
+          <span class="fund-pill risk">${counts.a} avoid/fail</span>
+        </div>
+      </div>
+      <div class="fund-assistant-grid">
+        ${tile("Best candidate", best?.sym || "-", best ? `${best.label} · ${fundReasons(best, th)}` : "No data", "good")}
+        ${tile("Review risk", risk?.sym || "-", risk ? `${risk.label} · ${fundReasons(risk, th)}` : "No data", "risk")}
+        ${tile("Valuation watch", expensive?.sym || "Clear", expensive ? `PE ${expensive.pe}x exceeds ${th.tPE}x cap` : "No PE breach in current list", expensive ? "warn" : "good")}
+        ${tile("Quality count", String(quality), `Hard pass + ROE >= ${th.tROE}% + stable promoter`, quality ? "good" : "warn")}
+      </div>
+    </div>`;
+}
+
 function renderFund() {
   const th = getThresholds();
   const scored = FUND_STOCKS.map(s => {
@@ -1405,6 +1474,7 @@ function renderFund() {
     <div class="sum-card"><div class="sum-n" style="color:var(--amber)">${counts.w}</div><div class="sum-l">Watch</div></div>
     <div class="sum-card"><div class="sum-n" style="color:var(--muted)">${counts.a}</div><div class="sum-l">Avoid/Fail</div></div>
     <div class="sum-card"><div class="sum-n">${scored.length}</div><div class="sum-l">Total</div></div>`;
+  renderFundAssistant(scored, th, counts);
 
   const filtered = scored.filter(s => {
     if (fundFilter==="all")     return true;
