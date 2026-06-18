@@ -35,8 +35,50 @@ exports.handler = async (event) => {
     }
 
     const rows = await res.json();
-    return { statusCode: 200, headers: H, body: JSON.stringify({ ok: true, symbols: rows }) };
+    const symbols = rows.length ? rows : await searchYahoo(q, exchange, limit);
+    return { statusCode: 200, headers: H, body: JSON.stringify({ ok: true, symbols }) };
   } catch (e) {
-    return { statusCode: 200, headers: H, body: JSON.stringify({ ok: false, error: e.message }) };
+    try {
+      const symbols = await searchYahoo(q, exchange, limit);
+      return { statusCode: 200, headers: H, body: JSON.stringify({ ok: true, symbols, fallback: "yahoo" }) };
+    } catch (_) {
+      return { statusCode: 200, headers: H, body: JSON.stringify({ ok: false, error: e.message }) };
+    }
   }
 };
+
+async function searchYahoo(q, exchange, limit) {
+  const suffix = exchange === "BSE" ? ".BO" : ".NS";
+  const candidates = [q, `${q}${suffix}`];
+  const out = [];
+  const seen = new Set();
+
+  for (const term of candidates) {
+    const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(term)}&quotesCount=${limit}&newsCount=0`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(7000)
+    });
+    if (!res.ok) continue;
+
+    const data = await res.json();
+    const quotes = Array.isArray(data?.quotes) ? data.quotes : [];
+    for (const item of quotes) {
+      const yf = String(item.symbol || "").toUpperCase();
+      if (!yf.endsWith(suffix)) continue;
+      const sym = yf.slice(0, -suffix.length);
+      if (!sym || seen.has(sym)) continue;
+      seen.add(sym);
+      out.push({
+        tradingsymbol: sym,
+        name: item.longname || item.shortname || item.name || null,
+        exchange,
+        yf,
+        source: "yahoo"
+      });
+      if (out.length >= limit) return out;
+    }
+  }
+
+  return out;
+}
