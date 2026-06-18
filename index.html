@@ -1600,10 +1600,29 @@ function showToast(msg) {
   setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity .3s"; setTimeout(() => t.remove(), 320); }, 2400);
 }
 
-// Populate symbol datalist from UNIVERSE
-function initSymList() {
+// Populate symbol datalist from built-ins, screener data, and server search.
+let _symSuggestTimer = null;
+const _symSuggestCache = {};
+
+function setSymListOptions(items) {
   const dl = document.getElementById("symList");
-  UNIVERSE.forEach(s => { const o = document.createElement("option"); o.value = s.sym; dl.appendChild(o); });
+  if (!dl) return;
+  const seen = new Set();
+  dl.innerHTML = "";
+  items.forEach(item => {
+    const sym = typeof item === "string" ? item : item.sym || item.tradingsymbol;
+    if (!sym || seen.has(sym)) return;
+    seen.add(sym);
+    const o = document.createElement("option");
+    o.value = sym;
+    const name = item.name || item.sec || item.exchange || "";
+    if (name) o.label = `${sym} - ${name}`;
+    dl.appendChild(o);
+  });
+}
+
+function initSymList() {
+  setSymListOptions(UNIVERSE.map(s => ({ sym: s.sym, name: s.name || s.sec })));
 }
 
 function refreshSymList() {
@@ -1614,12 +1633,40 @@ function refreshSymList() {
   techStocks.forEach(s => {
     if (!seen.has(s.tradingsymbol) || s.exchange === "NSE") seen.set(s.tradingsymbol, s);
   });
-  dl.innerHTML = "";
-  [...seen.keys()].sort().forEach(sym => {
-    const o = document.createElement("option");
-    o.value = sym;
-    dl.appendChild(o);
-  });
+  setSymListOptions([...seen.values()].sort((a,b) => a.tradingsymbol.localeCompare(b.tradingsymbol)));
+}
+
+function debounceSymbolSuggestions(raw) {
+  clearTimeout(_symSuggestTimer);
+  const q = String(raw || "").trim().toUpperCase().replace(/\s+/g, "");
+  if (q.length < 2) { initSymList(); return; }
+  _symSuggestTimer = setTimeout(() => loadSymbolSuggestions(q), 180);
+}
+
+async function loadSymbolSuggestions(q) {
+  const exch = document.getElementById("mExch")?.value === "BO" ? "BSE" : "NSE";
+  const key = `${exch}:${q}`;
+  if (_symSuggestCache[key]) { setSymListOptions(_symSuggestCache[key]); return; }
+
+  const localMatches = [
+    ...UNIVERSE.filter(s => s.sym.startsWith(q)).map(s => ({ sym: s.sym, name: s.name || s.sec })),
+    ...(techStocks || [])
+      .filter(s => String(s.tradingsymbol || "").startsWith(q))
+      .map(s => ({ sym: s.tradingsymbol, name: s.exchange }))
+  ];
+  if (localMatches.length) setSymListOptions(localMatches);
+
+  try {
+    const r = await fetch(`/.netlify/functions/symbol-search?q=${encodeURIComponent(q)}&exchange=${exch}&limit=30`);
+    const d = await r.json();
+    if (d.ok && Array.isArray(d.symbols)) {
+      const rows = d.symbols.map(s => ({ sym: s.tradingsymbol, name: [s.name, s.exchange].filter(Boolean).join(" - ") }));
+      _symSuggestCache[key] = rows.length ? rows : localMatches;
+      setSymListOptions(_symSuggestCache[key]);
+    }
+  } catch(e) {
+    if (localMatches.length) setSymListOptions(localMatches);
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -3325,6 +3372,7 @@ let _mSymTimer = null;
 function debounceMSymLookup(val) {
   clearTimeout(_mSymTimer);
   const sym = val.trim().toUpperCase().replace(/\s+/g, "");
+  debounceSymbolSuggestions(sym);
   const el  = document.getElementById("mCmpDisplay");
   if (!el) return;
   if (!sym) { el.innerHTML = `<span style="color:var(--muted)">—</span>`; return; }
