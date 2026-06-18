@@ -6,7 +6,7 @@
 <title>TradeSignal Pro V2 — NSE Screener</title>
 <meta name="kite-api-key" content="">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
 /* ── Design tokens — Light theme ────────────────────────────────────────── */
@@ -19,7 +19,7 @@
   --blue:  #185FA5; --blue2:  #378ADD; --blue3:  #E6F1FB;
   --amber: #854F0B; --amber2: #EF9F27; --amber3: #FAEEDA;
   --purple:#534AB7;
-  --font: 'Syne', sans-serif; --mono: 'JetBrains Mono', monospace;
+  --font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; --mono: 'JetBrains Mono', monospace;
   --r: 10px; --r2: 7px;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -377,7 +377,7 @@ select.mf-input{background:#fff;color:var(--txt);font-weight:700}
 .fd-section{border:1px solid var(--bdr);border-radius:var(--r);padding:12px;background:var(--bg2)}
 .fd-section-title{font-size:11px;font-weight:800;color:#263B5E;text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px}
 .fd-checks{display:flex;flex-direction:column;gap:8px}
-.fd-check{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:9px;align-items:start;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.42}
+.fd-check{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:9px;align-items:start;font-family:var(--font);font-size:13px;line-height:1.42}
 .fd-dot{width:18px;height:18px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;font-family:var(--mono);background:var(--bg4);color:var(--muted);border:1px solid var(--bdr);margin-top:1px}
 .fd-dot.pass{background:var(--green3);color:var(--green);border-color:#A0D9C5}
 .fd-dot.fail{background:var(--red3);color:var(--red);border-color:#F5BABA}
@@ -3670,7 +3670,7 @@ async function renderBubbleChart(rows, totalInvested) {
           const chart = this;
           const ctx   = chart.ctx;
           ctx.save();
-          ctx.font = "bold 11px 'Syne', sans-serif";
+          ctx.font = "600 11px 'Inter', sans-serif";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           chart.data.datasets.forEach((ds, di) => {
@@ -5005,7 +5005,7 @@ async function renderHistorySection(trades) {
   await loadScript("https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js");
   if (typeof Chart === "undefined") return;
 
-  const sansFont  = { family:"'Syne',sans-serif", size:11, weight:"600" };
+  const sansFont  = { family:"'Inter',sans-serif", size:11, weight:"600" };
   const monoFont  = { family:"'JetBrains Mono',monospace", size:11 };
   const gridClr   = "#E5E9F4";
   const tickClr   = "#6272A0";
@@ -5119,7 +5119,7 @@ async function renderJourneyChart(trades, mode) {
   await loadScript("https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js");
   if (typeof Chart === "undefined") return;
 
-  const sansFont = { family:"'Syne',sans-serif", size:11, weight:"600" };
+  const sansFont = { family:"'Inter',sans-serif", size:11, weight:"600" };
   const monoFont = { family:"'JetBrains Mono',monospace", size:11 };
   const GREEN="#1D9E75", RED="#E24B4A", BLUE="#378ADD";
   const gridClr="#E5E9F4", tickClr="#6272A0";
