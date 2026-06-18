@@ -258,6 +258,8 @@ td { padding: 9px 10px; vertical-align: middle; }
 .fund-pill.risk{background:#FDEAEA;color:var(--red);border-color:#F5BABA}
 .fund-assistant-grid{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:8px}
 .fund-tile{background:#F7F9FD;border:1px solid var(--bdr);border-radius:8px;padding:8px 10px;min-height:58px}
+.fund-tile.clickable{cursor:pointer;transition:background .12s,border-color .12s,transform .12s}
+.fund-tile.clickable:hover{background:#EEF4FF;border-color:var(--blue2);transform:translateY(-1px)}
 .fund-tile-l{font-size:9px;font-weight:800;color:#384A67;text-transform:uppercase;letter-spacing:.07em}
 .fund-tile-v{font-size:13px;font-weight:800;color:var(--txt);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fund-tile-s{font-size:10px;color:#52627D;line-height:1.35;margin-top:2px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1503,8 +1505,8 @@ function renderFundAssistant(scored, th, counts) {
   const risk = hardFails[0] || [...scored].sort((a,b) => a.sc - b.sc || a.promo - b.promo)[0];
   const expensive = scored.filter(s => s.pe != null && s.pe > th.tPE).sort((a,b) => (b.pe || 0) - (a.pe || 0))[0];
   const quality = scored.filter(s => s.hardPass && s.roe >= th.tROE && s.promoT !== "declining").length;
-  const tile = (label, value, sub, cls = "") => `
-    <div class="fund-tile ${cls}">
+  const tile = (label, value, sub, cls = "", sym = null) => `
+    <div class="fund-tile ${cls} ${sym ? "clickable" : ""}" ${sym ? `onclick="openFundDetailPanel('${jsStr(sym)}')" title="Open ${esc(sym)} details"` : ""}>
       <div class="fund-tile-l">${esc(label)}</div>
       <div class="fund-tile-v">${esc(value)}</div>
       <div class="fund-tile-s">${esc(sub)}</div>
@@ -1530,6 +1532,17 @@ function renderFundAssistant(scored, th, counts) {
         ${tile("Quality count", String(quality), `Hard pass + ROE >= ${th.tROE}% + stable promoter`, quality ? "good" : "warn")}
       </div>
     </div>`;
+
+  [
+    { el: el.querySelector(".fund-tile:nth-child(1)"), sym: best?.sym },
+    { el: el.querySelector(".fund-tile:nth-child(2)"), sym: risk?.sym },
+    { el: el.querySelector(".fund-tile:nth-child(3)"), sym: expensive?.sym }
+  ].forEach(item => {
+    if (!item.el || !item.sym) return;
+    item.el.classList.add("clickable");
+    item.el.title = `Open ${item.sym} details`;
+    item.el.onclick = () => openFundDetailPanel(item.sym);
+  });
 }
 
 let _lastFundScored = [];
