@@ -348,6 +348,42 @@ select.mf-input{background:#fff;color:var(--txt);font-weight:700}
 .ab-section{margin-bottom:12px}
 .ab-section-hdr{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
 .ab-text{font-size:12px;line-height:1.7;color:var(--txt)}
+.fd-overlay{position:fixed;inset:0;background:rgba(17,24,39,.42);z-index:235;opacity:0;transition:opacity .22s;pointer-events:none;backdrop-filter:blur(2px)}
+.fd-overlay.open{opacity:1;pointer-events:auto}
+.fd-panel{position:fixed;top:0;right:0;width:500px;max-width:100vw;height:100vh;background:var(--bg2);border-left:1px solid var(--bdr);z-index:236;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .26s cubic-bezier(.4,0,.2,1);box-shadow:-8px 0 38px rgba(0,0,0,.16)}
+.fd-panel.open{transform:translateX(0)}
+.fd-scroll{flex:1;overflow:auto}
+.fd-hdr{padding:14px 16px;border-bottom:1px solid var(--bdr);background:var(--bg3);display:flex;align-items:flex-start;gap:10px;position:sticky;top:0;z-index:2}
+.fd-title{font-size:20px;font-weight:800;letter-spacing:-.4px}
+.fd-sub{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:3px;line-height:1.45}
+.fd-close{background:var(--bg4);border:1px solid var(--bdr);border-radius:6px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);font-size:15px;flex-shrink:0}
+.fd-close:hover{background:var(--red3);color:var(--red);border-color:#F5BABA}
+.fd-body{padding:14px 16px 18px;display:flex;flex-direction:column;gap:12px}
+.fd-hero{border:1px solid var(--bdr);border-left:4px solid var(--blue2);border-radius:var(--r);padding:12px;background:var(--bg2)}
+.fd-hero.risk{border-left-color:var(--red2)}
+.fd-hero.good{border-left-color:var(--green2)}
+.fd-hero.watch{border-left-color:var(--amber2)}
+.fd-hero-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.fd-verdict{font-size:15px;font-weight:800;color:var(--txt)}
+.fd-score{font-size:20px;font-weight:800;font-family:var(--mono)}
+.fd-reason{font-size:12px;line-height:1.55;color:var(--txt)}
+.fd-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fd-metric{border:1px solid var(--bdr);border-radius:var(--r2);background:var(--bg3);padding:9px 10px;min-height:62px}
+.fd-ml{font-size:9px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.fd-mv{font-size:14px;font-weight:800;font-family:var(--mono);margin-top:4px;line-height:1.2;color:var(--txt)}
+.fd-ms{font-size:10px;color:#52627D;line-height:1.35;margin-top:2px;font-weight:600}
+.fd-section{border:1px solid var(--bdr);border-radius:var(--r);padding:12px;background:var(--bg2)}
+.fd-section-title{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px}
+.fd-checks{display:flex;flex-direction:column;gap:7px}
+.fd-check{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:8px;align-items:start;font-size:12px;line-height:1.45}
+.fd-dot{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;font-family:var(--mono);background:var(--bg4);color:var(--muted);border:1px solid var(--bdr)}
+.fd-dot.pass{background:var(--green3);color:var(--green);border-color:#A0D9C5}
+.fd-dot.fail{background:var(--red3);color:var(--red);border-color:#F5BABA}
+.fd-dot.unknown{background:#EEF4FF;color:var(--blue);border-color:#B8CAE8}
+.fd-check-name{font-weight:700;color:var(--txt)}
+.fd-check-note{font-size:10px;color:#52627D;margin-top:1px;font-weight:600}
+.fd-th{font-size:10px;color:var(--muted);font-family:var(--mono);white-space:nowrap}
+.fd-actions{display:flex;gap:7px;flex-wrap:wrap}
 .insight-row{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;background:var(--bg3);border-radius:var(--r2);margin-bottom:5px;font-size:12px;line-height:1.5}
 .insight-icon{font-size:14px;flex-shrink:0}
 .pa-summary{background:var(--bg2);border:1px solid var(--bdr);border-left:4px solid var(--blue);border-radius:var(--r);padding:12px 14px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
@@ -1612,6 +1648,141 @@ function renderFundAIOutput(a) {
   </div>`;
 }
 
+function openFundDetailPanel(sym) {
+  const s = _lastFundScored.find(x => x.sym === sym);
+  if (!s) return;
+  const overlay = document.getElementById("fdOverlay");
+  const panel = document.getElementById("fundDetailPanel");
+  const content = document.getElementById("fdContent");
+  if (!overlay || !panel || !content) return;
+  content.innerHTML = renderFundDetailPanel(s, getThresholds());
+  overlay.classList.add("open");
+  panel.classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+
+function closeFundDetailPanel() {
+  document.getElementById("fdOverlay")?.classList.remove("open");
+  document.getElementById("fundDetailPanel")?.classList.remove("open");
+  document.body.style.overflow = "";
+}
+
+function fundMetricValue(v, suffix = "") {
+  return v === null || v === undefined || Number.isNaN(Number(v)) ? "NA" : `${v}${suffix}`;
+}
+
+function fundDataGaps(s) {
+  const gaps = [];
+  if (s.pe === null || s.pe === undefined) gaps.push("PE ratio");
+  if (s.rev === null || s.rev === undefined) gaps.push("Revenue growth");
+  if (s.profit === null || s.profit === undefined) gaps.push("Profit growth");
+  if (s.roe === null || s.roe === undefined) gaps.push("ROE");
+  if (s.de === null || s.de === undefined) gaps.push("Debt/equity");
+  if (s.promoT === "na") gaps.push("Promoter trend");
+  return gaps;
+}
+
+function fundDetailChecks(s, th) {
+  const debtLimit = s.isNBFC ? "D/E <= 7x" : "D/E <= 1x";
+  return [
+    { group:"Hard", name:"Surveillance", pass:s.hard.surv, note:s.hard.surv ? "No surveillance flag in this screen." : "Surveillance risk blocks qualification.", th:"Required" },
+    { group:"Hard", name:"Profit history", pass:s.hard.profit, note:`Profitable quarter count proxy: ${s.profQ ?? "NA"}.`, th:"3+ qtrs" },
+    { group:"Hard", name:"Market cap", pass:s.hard.mcap, note:`Market cap ${s.live?.mcapCr ? fmtMcap(s.live.mcapCr) : s.mcapCr ? fmtMcap(s.mcapCr) : "NA"}.`, th:`>= ${th.tMcap}Cr` },
+    { group:"Hard", name:"Promoter holding", pass:s.hard.promo, note:`Promoter ${s.promoT === "na" ? "NA" : s.promo + "% " + s.promoT}.`, th:`>= ${th.tPromo}%` },
+    { group:"Soft", name:"Revenue growth", pass:s.soft.rev, unknown:s.rev == null, note:`Revenue growth ${fundMetricValue(s.rev, "%")}.`, th:`>= ${th.tRev}%` },
+    { group:"Soft", name:"Profit growth", pass:s.soft.profit, unknown:s.profit == null, note:`Profit growth ${fundMetricValue(s.profit, "%")}.`, th:`>= ${th.tProfit}%` },
+    { group:"Soft", name:"Valuation", pass:s.soft.pe, unknown:s.pe == null, note:`PE ratio ${fundMetricValue(s.pe, "x")}.`, th:`<= ${th.tPE}x` },
+    { group:"Soft", name:"ROE", pass:s.soft.roe, unknown:s.roe == null, note:`ROE ${fundMetricValue(s.roe, "%")}.`, th:`>= ${th.tROE}%` },
+    { group:"Signal", name:"Leverage", pass:s.sig.de, unknown:s.de == null, note:`Debt/equity ${fundMetricValue(s.de, "x")}.`, th:debtLimit },
+    { group:"Signal", name:"Promoter quality", pass:s.sig.promo, note:s.promoT === "declining" ? "Promoter holding is declining." : "Checks for high and stable promoter ownership.", th:">= 40%" },
+    { group:"Signal", name:"Technical support", pass:s.sig.ma, unknown:s.sig.ma == null, note:`MA trend ${s.live?.maTrend || "NA"}.`, th:"Above 50/200MA" }
+  ];
+}
+
+function fundNextActions(s) {
+  const gaps = fundDataGaps(s);
+  if (!s.hardPass) return [
+    "Do not add fresh capital until hard-gate failures are resolved.",
+    "Check latest exchange filings and quarterly results before review.",
+    gaps.length ? `Fill missing data: ${gaps.slice(0, 4).join(", ")}.` : "Compare valuation with sector peers before any decision."
+  ];
+  if (s.sc >= 7) return [
+    "Compare PE and growth with direct sector peers.",
+    "Check upcoming results date and recent promoter pledging before sizing.",
+    "Use technical trend as timing filter, not as the main thesis."
+  ];
+  return [
+    "Keep on watchlist until more soft gates pass.",
+    gaps.length ? `Complete missing metrics: ${gaps.slice(0, 4).join(", ")}.` : "Watch for earnings growth or valuation improvement.",
+    "Avoid averaging down unless fundamentals improve."
+  ];
+}
+
+function renderFundDetailPanel(s, th) {
+  const gaps = fundDataGaps(s);
+  const heroCls = !s.hardPass || s.sc < 3 ? "risk" : s.sc >= 7 ? "good" : "watch";
+  const scoreColor = s.sc >= 7 ? "var(--green)" : s.sc >= 5 ? "var(--blue)" : s.sc >= 3 ? "var(--amber)" : "var(--red)";
+  const checks = fundDetailChecks(s, th);
+  const checkRows = group => checks.filter(c => c.group === group).map(c => {
+    const state = c.unknown ? "unknown" : c.pass ? "pass" : "fail";
+    const mark = c.unknown ? "?" : c.pass ? "Y" : "N";
+    return `<div class="fd-check">
+      <span class="fd-dot ${state}">${mark}</span>
+      <span><div class="fd-check-name">${esc(c.name)}</div><div class="fd-check-note">${esc(c.note)}</div></span>
+      <span class="fd-th">${esc(c.th)}</span>
+    </div>`;
+  }).join("");
+  const metric = (label, value, sub, color = "") => `<div class="fd-metric"><div class="fd-ml">${esc(label)}</div><div class="fd-mv" style="${color ? `color:${color}` : ""}">${esc(value)}</div><div class="fd-ms">${esc(sub || "")}</div></div>`;
+  const actions = fundNextActions(s).map(a => `<div class="pa-item"><span class="pa-dot"></span><span>${esc(a)}</span></div>`).join("");
+  const liveCmp = s.live?.cmp ? "Rs " + fmtCmp(s.live.cmp) : "NA";
+  const chg = s.live?.chg1d == null ? "1D NA" : `1D ${s.live.chg1d >= 0 ? "+" : ""}${s.live.chg1d.toFixed(1)}%`;
+
+  return `<div class="fd-hdr">
+    <div style="flex:1;min-width:0">
+      <div class="fd-title">${esc(s.sym)}</div>
+      <div class="fd-sub">${esc(s.name || s.sec || "Fundamental detail")} &middot; ${esc(s.sec || "Unclassified")}</div>
+    </div>
+    <button class="fd-close" onclick="closeFundDetailPanel()">x</button>
+  </div>
+  <div class="fd-body">
+    <div class="fd-hero ${heroCls}">
+      <div class="fd-hero-top">
+        <div>
+          <div class="fd-verdict">${esc(s.label)}</div>
+          <div class="fd-sub">${esc(liveCmp)} &middot; ${esc(chg)} &middot; ${esc(s.live?.maTrend || "trend NA")}</div>
+        </div>
+        <div class="fd-score" style="color:${scoreColor}">${s.sc}/10</div>
+      </div>
+      <div class="fd-reason">${esc(fundReasons(s, th))}</div>
+    </div>
+
+    <div class="fd-grid">
+      ${metric("PE", fundMetricValue(s.pe, "x"), `Limit <= ${th.tPE}x`, s.pe != null && s.pe <= th.tPE ? "var(--green)" : s.pe == null ? "var(--muted)" : "var(--red)")}
+      ${metric("ROE", fundMetricValue(s.roe, "%"), `Target >= ${th.tROE}%`, s.roe != null && s.roe >= th.tROE ? "var(--green)" : s.roe == null ? "var(--muted)" : "var(--red)")}
+      ${metric("Growth", `${fundMetricValue(s.rev, "%")} / ${fundMetricValue(s.profit, "%")}`, "Revenue / profit growth")}
+      ${metric("Promoter", s.promoT === "na" ? "NA" : `${s.promo}%`, s.promoT === "na" ? "Trend unavailable" : s.promoT)}
+      ${metric("Debt", fundMetricValue(s.de, "x"), s.isNBFC ? "NBFC leverage rule" : "Non-NBFC leverage rule")}
+      ${metric("Market cap", s.live?.mcapCr ? fmtMcap(s.live.mcapCr) : s.mcapCr ? fmtMcap(s.mcapCr) : "NA", "Minimum screen size")}
+    </div>
+
+    <div class="fd-section"><div class="fd-section-title">Hard Gates</div><div class="fd-checks">${checkRows("Hard")}</div></div>
+    <div class="fd-section"><div class="fd-section-title">Soft Gates</div><div class="fd-checks">${checkRows("Soft")}</div></div>
+    <div class="fd-section"><div class="fd-section-title">Signals</div><div class="fd-checks">${checkRows("Signal")}</div></div>
+    <div class="fd-section">
+      <div class="fd-section-title">Data Gaps</div>
+      <div class="ab-text">${gaps.length ? esc(gaps.join(", ")) : "No major data gaps detected in this screen."}</div>
+    </div>
+    <div class="fd-section">
+      <div class="fd-section-title">Next Actions</div>
+      <div class="pa-list">${actions}</div>
+    </div>
+    <div class="fd-section">
+      <div class="fd-section-title">Source Note</div>
+      <div class="ab-text">${esc(s.note || "Rule-based screen generated from available static and live data.")}</div>
+    </div>
+  </div>`;
+}
+
 function renderFund() {
   const th = getThresholds();
   const scored = allFundStocks().map(s => {
@@ -1667,7 +1838,8 @@ function renderFund() {
     const sc = Math.max(0, s.sc);
     const scColor = sc >= 7 ? "var(--green)" : sc >= 5 ? "var(--blue)" : sc >= 3 ? "var(--amber)" : "var(--muted)";
     const tr = document.createElement("tr");
-    tr.onclick = () => toggleExp("f" + s.sym);
+    tr.style.cursor = "pointer";
+    tr.onclick = () => openFundDetailPanel(s.sym);
     tr.innerHTML = `
       <td><div class="sym-name">${s.sym}</div><div class="sym-sec">${s.sec}</div></td>
       <td><div class="cmp-val">${s.live?.cmp ? "₹"+fmtCmp(s.live.cmp) : "—"}</div></td>
@@ -1679,7 +1851,7 @@ function renderFund() {
         <div style="font-size:15px;font-weight:700;font-family:var(--mono);color:${scColor}">${sc}<span style="font-size:10px;color:var(--muted)">/10</span></div>
         <div style="height:3px;background:var(--bdr);border-radius:2px;margin-top:3px;overflow:hidden"><div style="width:${sc*10}%;height:100%;background:${scColor};border-radius:2px"></div></div>
       </td>
-      <td><span class="badge ${s.cls}">${s.label}</span></td>`;
+      <td><span class="badge ${s.cls}">${s.label}</span><button class="btn" onclick="event.stopPropagation();openFundDetailPanel('${jsStr(s.sym)}')" style="font-size:10px;padding:3px 8px;margin-left:6px">Details</button></td>`;
     tbody.appendChild(tr);
 
     const expTr = document.createElement("tr");
@@ -5954,6 +6126,14 @@ setInterval(() => {
 <div id="portfolioAssistantPanel" class="pa-panel">
   <div class="pa-scroll">
     <div id="paContent"></div>
+  </div>
+</div>
+
+<!-- Fundamental Detail Drawer -->
+<div id="fdOverlay" class="fd-overlay" onclick="closeFundDetailPanel()"></div>
+<div id="fundDetailPanel" class="fd-panel">
+  <div class="fd-scroll">
+    <div id="fdContent"></div>
   </div>
 </div>
 
