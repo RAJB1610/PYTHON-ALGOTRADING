@@ -1445,7 +1445,7 @@ function fundScore(s, th, live) {
   const sig = {
     de:    s.de === null ? true : (s.isNBFC ? s.de <= 7 : s.de <= 1),
     promo: s.promo >= 40 && s.promoT !== "declining",
-    ma:    live ? (live.abv50 && live.abv200) : null
+    ma:    live ? live.maTrend === "uptrend" : null
   };
   const sc = hardPass ? Object.values(soft).filter(Boolean).length + Object.values(sig).filter(v=>v===true).length : 0;
   let label, cls;
@@ -1846,7 +1846,7 @@ function renderFund() {
   document.getElementById("fundCt").textContent = `${fundDisp.length} of ${scored.length}`;
 
   function pip(v, tip) {
-    if (v === null) return `<div class="sp load" title="${tip}">?</div>`;
+    if (v === null) return `<div class="sp load" title="${tip} unavailable">-</div>`;
     return `<div class="sp ${v?"green":"red"}" title="${tip}">${v?"✓":"✗"}</div>`;
   }
   function chgSpan(val) {

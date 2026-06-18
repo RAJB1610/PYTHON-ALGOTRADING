@@ -13,7 +13,7 @@ exports.handler = async (event) => {
   const symbol = event.queryStringParameters?.symbol?.trim();
   if (!symbol) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "symbol required" }) };
 
-  const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=6mo&includePrePost=false`;
+  const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1y&includePrePost=false`;
 
   try {
     const res = await fetch(url, {
@@ -59,8 +59,8 @@ exports.handler = async (event) => {
     const newHigh = hi52 ? cmp >= hi52 * 0.99 : false;
 
     // ── Moving Averages ────────────────────────────────────────────────────
-    const ma50  = meta.fiftyDayAverage   ?? null;
-    const ma200 = meta.twoHundredDayAverage ?? null;
+    const ma50  = meta.fiftyDayAverage ?? sma(closes, 50);
+    const ma200 = meta.twoHundredDayAverage ?? sma(closes, 200);
     const abv50  = ma50  ? cmp > ma50  : null;
     const abv200 = ma200 ? cmp > ma200 : null;
     const ma50abv200 = (ma50 && ma200) ? ma50 > ma200 : null;
@@ -153,6 +153,12 @@ function emaArr(data, period) {
     out.push(val);
   }
   return out; // out[j] corresponds to data[period - 1 + j]
+}
+
+function sma(data, period) {
+  if (!Array.isArray(data) || data.length < period) return null;
+  const slice = data.slice(-period);
+  return +(slice.reduce((a, b) => a + b, 0) / period).toFixed(2);
 }
 
 function calcMACD(closes, fast = 12, slow = 26, signal = 9) {
