@@ -543,8 +543,29 @@ select.mf-input{background:#fff;color:var(--txt);font-weight:700}
       <span class="result-ct" id="fundCt"></span>
     </div>
 
+    <div class="manual-form" style="padding:10px 12px">
+      <div class="mf-row">
+        <div class="mf-field mf-symbol-field" style="min-width:160px">
+          <label class="mf-label">Add symbol to fundamentals</label>
+          <input class="mf-input" id="fundSym" placeholder="e.g. BCG" oninput="debounceFundSymbolSearch(this.value)" onblur="setTimeout(hideFundSuggestions,160)">
+          <div class="sym-suggest-panel" id="fundSuggestPanel"></div>
+        </div>
+        <div class="mf-field" style="min-width:110px">
+          <label class="mf-label">Exchange</label>
+          <select class="mf-input" id="fundExch">
+            <option value="NSE">NSE (.NS)</option>
+            <option value="BSE">BSE (.BO)</option>
+          </select>
+        </div>
+        <button class="btn btn-green" style="align-self:flex-end;padding:7px 14px" onclick="addFundamentalSymbol()">Add / Refresh</button>
+        <button class="btn" id="fundAIBtn" style="align-self:flex-end;padding:7px 14px" onclick="runFundAI()">AI Fundamental Analysis</button>
+      </div>
+      <div id="fundAddMsg" style="font-size:11px;color:var(--muted);margin-top:7px"></div>
+    </div>
+
     <div class="summary" id="fundSummary"></div>
     <div id="fundAssistant"></div>
+    <div id="fundAIBox"></div>
     <div class="alpha-bar" id="fundAlpha"></div>
     <div class="tbl-wrap">
       <table>
@@ -1087,7 +1108,7 @@ async function startScan() {
     renderTech();
     renderWatchlist();
   } else {
-    const list = FUND_STOCKS.map(s => ({ sym: s.sym, yf: s.yf }));
+    const list = allFundStocks().map(s => ({ sym: s.sym, yf: s.yf }));
     scanDone = 0; scanTotal = list.length;
     showProgress(true);
     for (const s of list) {
@@ -1348,8 +1369,8 @@ function renderTech() {
 // FUNDAMENTALS RENDER (carried from V1)
 // ════════════════════════════════════════════════════════════════════════════
 function fundScore(s, th, live) {
-  const mcap = live?.mcapCr ?? null;
-  const pe   = live?.pe ?? (s.sym==="TCS"?17.87:s.sym==="MUTHOOTFIN"?15.8:s.sym==="SUZLON"?23.32:null);
+  const mcap = live?.mcapCr ?? s.mcapCr ?? null;
+  const pe   = live?.pe ?? s.peOverride ?? (s.sym==="TCS"?17.87:s.sym==="MUTHOOTFIN"?15.8:s.sym==="SUZLON"?23.32:null);
   const hard = {
     surv:   !s.surv,
     profit: s.profQ >= 3,
@@ -1453,13 +1474,152 @@ function renderFundAssistant(scored, th, counts) {
     </div>`;
 }
 
+let _lastFundScored = [];
+let _fundSuggestTimer = null;
+
+function setFundMsg(msg, type = "info") {
+  const el = document.getElementById("fundAddMsg");
+  if (!el) return;
+  const colors = { info: "var(--muted)", ok: "var(--green)", err: "var(--red)" };
+  el.style.color = colors[type] || colors.info;
+  el.textContent = msg || "";
+}
+
+function hideFundSuggestions() {
+  document.getElementById("fundSuggestPanel")?.classList.remove("open");
+}
+
+function chooseFundSuggestion(sym) {
+  const input = document.getElementById("fundSym");
+  if (input) input.value = sym;
+  clearTimeout(_fundSuggestTimer);
+  hideFundSuggestions();
+}
+
+function renderFundSuggestions(q, items) {
+  const panel = document.getElementById("fundSuggestPanel");
+  if (!panel) return;
+  const rows = [{ sym: q, name: "Use typed symbol" }, ...items]
+    .filter(x => x?.sym)
+    .filter((x, i, arr) => arr.findIndex(y => y.sym === x.sym) === i)
+    .slice(0, 10);
+  if (!q || q.length < 2) { panel.classList.remove("open"); panel.innerHTML = ""; return; }
+  panel.innerHTML = rows.map(x => `
+    <button type="button" class="sym-suggest-item" onmousedown="event.preventDefault();chooseFundSuggestion('${jsStr(x.sym)}')">
+      <span class="sym-suggest-sym">${esc(x.sym)}</span>
+      <span class="sym-suggest-name">${esc(x.name || "")}</span>
+    </button>`).join("");
+  panel.classList.add("open");
+}
+
+function debounceFundSymbolSearch(raw) {
+  clearTimeout(_fundSuggestTimer);
+  const q = String(raw || "").trim().toUpperCase().replace(/\s+/g, "");
+  if (q.length < 2) { hideFundSuggestions(); return; }
+  renderFundSuggestions(q, []);
+  _fundSuggestTimer = setTimeout(async () => {
+    const exch = document.getElementById("fundExch")?.value || "NSE";
+    try {
+      const r = await fetch(`/.netlify/functions/symbol-search?q=${encodeURIComponent(q)}&exchange=${exch}&limit=20`);
+      const d = await r.json();
+      const rows = d.ok && Array.isArray(d.symbols)
+        ? d.symbols.map(s => ({ sym: s.tradingsymbol, name: [s.name, s.exchange || exch].filter(Boolean).join(" - ") }))
+        : [];
+      renderFundSuggestions(q, rows);
+    } catch(e) {
+      renderFundSuggestions(q, []);
+    }
+  }, 180);
+}
+
+async function addFundamentalSymbol() {
+  const input = document.getElementById("fundSym");
+  const sym = String(input?.value || "").trim().toUpperCase().replace(/\s+/g, "");
+  const exchange = document.getElementById("fundExch")?.value || "NSE";
+  if (!sym) { setFundMsg("Enter a symbol first.", "err"); return; }
+  setFundMsg(`Fetching ${sym} fundamentals from Yahoo...`, "info");
+  try {
+    const r = await fetch(`/.netlify/functions/fundamental-data?symbol=${encodeURIComponent(sym)}&exchange=${exchange}`);
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || "No fundamentals found");
+    const row = {
+      sym: d.sym,
+      yf: d.yf,
+      name: d.name,
+      sec: d.sec,
+      isNBFC: !!d.isNBFC,
+      surv: false,
+      profQ: d.profQ ?? 3,
+      promo: d.promo ?? 0,
+      promoT: d.promoT || "na",
+      rev: d.rev,
+      profit: d.profit,
+      roe: d.roe ?? 0,
+      de: d.de,
+      peOverride: d.pe,
+      mcapCr: d.mcapCr,
+      note: d.note,
+      source: d.source || "yahoo"
+    };
+    customFundStocks = customFundStocks.filter(x => x.sym !== row.sym);
+    customFundStocks.push(row);
+    saveCustomFundStocks();
+    if (input) input.value = "";
+    hideFundSuggestions();
+    setFundMsg(`Added ${row.sym} from Yahoo fundamentals.`, "ok");
+    await fetchOne(row.yf, row.sym);
+    renderFund();
+  } catch(e) {
+    setFundMsg(e.message, "err");
+  }
+}
+
+async function runFundAI() {
+  const btn = document.getElementById("fundAIBtn");
+  const box = document.getElementById("fundAIBox");
+  if (!box) return;
+  if (!_lastFundScored.length) renderFund();
+  if (btn) { btn.disabled = true; btn.textContent = "Analysing..."; }
+  box.innerHTML = `<div class="ai-loading"><div class="ai-spinner"></div><span>Analysing fundamentals...</span></div>`;
+  try {
+    const stocks = _lastFundScored.map(s => ({
+      sym: s.sym, sec: s.sec, label: s.label, sc: s.sc, pe: s.pe, roe: s.roe,
+      rev: s.rev, profit: s.profit, promo: s.promo, promoT: s.promoT, de: s.de, note: s.note
+    }));
+    const res = await fetch("/.netlify/functions/analyze-fundamentals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stocks, thresholds: getThresholds() })
+    });
+    const d = await res.json();
+    if (!d.ok) throw new Error(d.error || "AI analysis failed");
+    box.innerHTML = renderFundAIOutput(d.analysis);
+  } catch(e) {
+    box.innerHTML = `<div class="insight-row" style="background:var(--red3)"><span class="insight-icon">!</span><span>Error: ${esc(e.message)} <button class="btn" onclick="runFundAI()" style="font-size:10px;margin-left:8px">Retry</button></span></div>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "AI Fundamental Analysis"; }
+  }
+}
+
+function renderFundAIOutput(a) {
+  const list = arr => (arr || []).map(x => `<li>${esc(typeof x === "string" ? x : `${x.sym}: ${x.reason || x.watchItem || ""}`)}</li>`).join("");
+  return `<div class="analysis-box">
+    <div class="ab-title">AI Fundamental Analysis</div>
+    <div class="ab-text">${esc(a.summary || "")}</div>
+    <div class="ab-section"><div class="ab-section-hdr">Best Ideas</div><ul class="ab-text" style="padding-left:18px">${list(a.bestIdeas)}</ul></div>
+    <div class="ab-section"><div class="ab-section-hdr">Avoid / Review</div><ul class="ab-text" style="padding-left:18px">${list(a.avoidOrReview)}</ul></div>
+    <div class="ab-section"><div class="ab-section-hdr">Next Actions</div><ul class="ab-text" style="padding-left:18px">${list(a.nextActions)}</ul></div>
+  </div>`;
+}
+
 function renderFund() {
   const th = getThresholds();
-  const scored = FUND_STOCKS.map(s => {
+  const scored = allFundStocks().map(s => {
     const live = liveData[s.sym] || null;
     const sc   = fundScore(s, th, live);
     return { ...s, live, ...sc };
   });
+  _lastFundScored = scored;
 
   const counts = { sb:0, q:0, w:0, a:0 };
   scored.forEach(s => {
@@ -1546,6 +1706,7 @@ function renderFund() {
 // ════════════════════════════════════════════════════════════════════════════
 let portfolio = [];
 let reviewStatus = {};
+let customFundStocks = [];
 
 function savePort()  { try { localStorage.setItem("ts_port", JSON.stringify(portfolio)); } catch(e) {} }
 function loadPort()  { try { const s = localStorage.getItem("ts_port"); if (s) portfolio = JSON.parse(s); } catch(e) {} }
@@ -1553,6 +1714,13 @@ function saveStockMeta() { try { localStorage.setItem("ts_stock_meta", JSON.stri
 function loadStockMeta() { try { const s = localStorage.getItem("ts_stock_meta"); if (s) stockMeta = JSON.parse(s) || {}; } catch(e) { stockMeta = {}; } }
 function saveReviewStatus() { try { localStorage.setItem("ts_review_status", JSON.stringify(reviewStatus)); } catch(e) {} }
 function loadReviewStatus() { try { const s = localStorage.getItem("ts_review_status"); if (s) reviewStatus = JSON.parse(s) || {}; } catch(e) { reviewStatus = {}; } }
+function saveCustomFundStocks() { try { localStorage.setItem("ts_custom_fund_stocks", JSON.stringify(customFundStocks)); } catch(e) {} }
+function loadCustomFundStocks() { try { const s = localStorage.getItem("ts_custom_fund_stocks"); if (s) customFundStocks = JSON.parse(s) || []; } catch(e) { customFundStocks = []; } }
+function allFundStocks() {
+  const bySym = new Map();
+  [...FUND_STOCKS, ...customFundStocks].forEach(s => bySym.set(s.sym, s));
+  return [...bySym.values()];
+}
 
 // ════════════════════════════════════════════════════════════════════════════
 // WATCHLIST
@@ -5045,6 +5213,7 @@ loadDataStatus();
 setInterval(loadDataStatus, 5 * 60 * 1000);
 loadStockMeta();
 loadReviewStatus();
+loadCustomFundStocks();
 loadWatch();
 initSymList();
 buildAlphaBar("techAlpha",  "setTechLetter");
