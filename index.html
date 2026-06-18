@@ -3415,13 +3415,45 @@ async function fetchPortfolioData() {
   const btn = document.getElementById("fetchPortBtn");
   if (btn) { btn.disabled = true; btn.textContent = "Fetching..."; }
   try {
-    await refreshPortPrices({ renderEach: true, delayMs: 380, retryFailed: false });
+    await refreshPortPrices({
+      renderEach: true,
+      retryFailed: false,
+      concurrency: 8,
+      onProgress: (done, total) => {
+        if (btn) btn.textContent = `Fetching ${done}/${total}`;
+      }
+    });
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "Refresh Prices"; }
   }
 }
 
 let _portRefreshPromise = null;
+const PORT_REFRESH_CONCURRENCY = 8;
+
+async function runPortfolioQuoteQueue(items, opts = {}) {
+  const {
+    concurrency = PORT_REFRESH_CONCURRENCY,
+    renderEach = false,
+    onProgress = null,
+  } = opts;
+  const failed = [];
+  let next = 0;
+  let done = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (next < items.length) {
+      const h = items[next++];
+      const yf = h.yf || h.sym + ".NS";
+      const ok = await fetchOne(yf, h.sym);
+      if (!ok) failed.push(h);
+      done++;
+      if (renderEach && (done === items.length || done % 8 === 0)) renderPortfolio();
+      if (onProgress) onProgress(done, items.length);
+    }
+  });
+  await Promise.all(workers);
+  return failed;
+}
 
 // Silent background refresh, called on load and every 3 min.
 async function refreshPortPrices(opts = {}) {
@@ -3430,28 +3462,19 @@ async function refreshPortPrices(opts = {}) {
 
   const {
     renderEach = false,
-    delayMs = 300,
     retryFailed = true,
     retryDelayMs = 1800,
+    concurrency = PORT_REFRESH_CONCURRENCY,
+    onProgress = null,
   } = opts;
 
   _portRefreshPromise = (async () => {
-    const failed = [];
-    for (const h of portfolio) {
-      const yf = h.yf || h.sym + ".NS";
-      const ok = await fetchOne(yf, h.sym);
-      if (!ok) failed.push(h);
-      if (renderEach) renderPortfolio();
-      await sleep(delayMs);
-    }
+    const snapshot = [...portfolio];
+    const failed = await runPortfolioQuoteQueue(snapshot, { concurrency, renderEach, onProgress });
 
     if (retryFailed && failed.length) {
       await sleep(retryDelayMs);
-      for (const h of failed) {
-        const yf = h.yf || h.sym + ".NS";
-        await fetchOne(yf, h.sym);
-        await sleep(delayMs);
-      }
+      await runPortfolioQuoteQueue(failed, { concurrency: Math.max(2, Math.floor(concurrency / 2)), renderEach });
     }
 
     renderPortfolio();
