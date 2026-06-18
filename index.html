@@ -987,12 +987,16 @@ async function fetchOne(yf, sym) {
   try {
     const r = await fetch(`/.netlify/functions/quote?symbol=${encodeURIComponent(yf)}`);
     const d = await r.json();
-    if (d.ok) liveData[sym] = d;
+    if (d.ok) {
+      liveData[sym] = d;
+      return true;
+    }
     else liveData[sym] = liveData[sym] || { _failed: true }; // mark attempted so UI shows "—" not "Loading…"
   } catch(e) {
     liveData[sym] = liveData[sym] || { _failed: true };
     console.warn(sym, e.message);
   }
+  return false;
 }
 
 // Normalize a signals-table row to the format renderTech() expects
@@ -2137,6 +2141,7 @@ function renderAssistantActionCell(action, sym) {
 
 let _paSym = null;
 let _paMode = null;
+let _journalFilter = "all";
 
 const REVIEW_STATUS_OPTIONS = [
   ["to_review", "To Review"],
@@ -2148,7 +2153,13 @@ const REVIEW_STATUS_OPTIONS = [
 ];
 
 function getReviewStatus(sym) {
-  return reviewStatus[sym] || "to_review";
+  const v = reviewStatus[sym];
+  return typeof v === "string" ? v : v?.status || "to_review";
+}
+
+function getReviewUpdatedAt(sym) {
+  const v = reviewStatus[sym];
+  return typeof v === "object" ? v.updatedAt || null : null;
 }
 
 function reviewStatusLabel(status) {
@@ -2169,11 +2180,12 @@ function reviewStatusSelect(sym) {
 function setReviewStatus(sym, status) {
   if (!sym) return;
   if (status === "to_review") delete reviewStatus[sym];
-  else reviewStatus[sym] = status;
+  else reviewStatus[sym] = { status, updatedAt: new Date().toISOString() };
   saveReviewStatus();
   renderPortfolio();
   renderPortfolioAssistant();
   if (_paMode === "review") openPortfolioReviewDetails();
+  if (_paMode === "journal") openDecisionJournal(_journalFilter);
 }
 
 function jsStr(s) {
@@ -2583,6 +2595,7 @@ function renderPortfolioAssistantPanel(a) {
     </div>
     <div class="pa-review-btn">
       <button class="btn" style="font-size:11px;padding:5px 12px" onclick="openRebalancePlanner()">What-if Rebalance</button>
+      <button class="btn" style="font-size:11px;padding:5px 12px" onclick="openDecisionJournal()">Decision Journal</button>
       <button class="btn btn-green" style="font-size:11px;padding:5px 12px" onclick="openPortfolioReviewDetails()">Review Details</button>
     </div>
       ${unclassified ? `
@@ -2674,6 +2687,106 @@ function openPortfolioReviewDetails() {
   document.getElementById("paOverlay").classList.add("open");
   document.getElementById("portfolioAssistantPanel").classList.add("open");
   document.body.style.overflow = "hidden";
+}
+
+function getDecisionJournalRows() {
+  const a = analyzePortfolioAssistant();
+  return a.holdings
+    .map(h => {
+      const status = getReviewStatus(h.sym);
+      if (status === "to_review") return null;
+      const original = portfolio.find(x => x.sym === h.sym) || {};
+      return {
+        ...h,
+        status,
+        statusLabel: reviewStatusLabel(status),
+        updatedAt: getReviewUpdatedAt(h.sym),
+        notes: original.notes || "",
+      };
+    })
+    .filter(Boolean)
+    .sort((x,y) => String(y.updatedAt || "").localeCompare(String(x.updatedAt || "")));
+}
+
+function openDecisionJournal(filter = "all") {
+  _paMode = "journal";
+  _journalFilter = filter;
+  const content = document.getElementById("paContent");
+  if (!content) return;
+  const rows = getDecisionJournalRows();
+  const filtered = filter === "all" ? rows : rows.filter(r => r.status === filter);
+  const filters = [["all","All"], ...REVIEW_STATUS_OPTIONS.filter(([v]) => v !== "to_review")]
+    .map(([v,l]) => `<button class="btn ${v===filter?"active":""}" style="font-size:10px;padding:4px 9px" onclick="openDecisionJournal('${v}')">${l}</button>`)
+    .join("");
+  const fmtDate = iso => iso ? new Date(iso).toLocaleString("en-IN", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }) : "not tracked";
+
+  content.innerHTML = `
+    <div class="pa-hdr">
+      <div style="flex:1;min-width:0">
+        <div class="pa-title">Decision Journal</div>
+        <div class="pa-sub">${rows.length} saved decision${rows.length===1?"":"s"} · browser local storage</div>
+      </div>
+      <button class="pa-close" onclick="closePortfolioAssistantDrawer()">✕</button>
+    </div>
+    <div class="pa-body">
+      <div class="pa-section">
+        <div class="pa-section-title">Filter</div>
+        <div class="pa-scenario-tabs">${filters}</div>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          <button class="btn btn-green" style="font-size:11px;padding:5px 12px" onclick="exportDecisionJournalCSV()">Export Review Plan CSV</button>
+          <button class="btn" style="font-size:11px;padding:5px 12px" onclick="openRebalancePlanner('planned')">Open My Plan</button>
+        </div>
+      </div>
+      <div class="pa-section">
+        <div class="pa-section-title">Saved Decisions</div>
+        <div class="pa-review-list">
+          ${filtered.length ? filtered.map(r => `
+            <div class="pa-review-row">
+              <div>
+                <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap">
+                  <div class="pa-review-title">${esc(r.sym)}</div>
+                  <span class="${reviewStatusClass(r.status)}">${esc(r.statusLabel)}</span>
+                  <span class="pa-chip pa-chip-watch">${esc(r.recommendation)}</span>
+                </div>
+                <div class="pa-review-meta">Updated ${esc(fmtDate(r.updatedAt))} · P&L ${r.pnlPct>=0?"+":""}${r.pnlPct.toFixed(1)}% · Weight ${r.weight.toFixed(1)}%</div>
+                <div class="pa-review-reason">${esc(r.notes || r.reason || "No note saved.")}</div>
+              </div>
+              <div style="display:flex;gap:6px;align-items:center;justify-content:flex-end;flex-wrap:wrap">
+                ${reviewStatusSelect(r.sym)}
+                <button class="btn" style="font-size:10px;padding:4px 10px" onclick="openPortfolioAssistantDrawer('${jsStr(r.sym)}')">Open</button>
+              </div>
+            </div>`).join("") : `
+            <div class="pa-review-row">
+              <div>
+                <div class="pa-review-title">No saved decisions</div>
+                <div class="pa-review-reason">Set a status such as Watching, Plan Trim, Plan Exit, Ignore, or Done from Review Details.</div>
+              </div>
+            </div>`}
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById("paOverlay").classList.add("open");
+  document.getElementById("portfolioAssistantPanel").classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+
+function exportDecisionJournalCSV() {
+  const rows = getDecisionJournalRows();
+  if (!rows.length) { showToast("No saved review decisions to export"); return; }
+  const header = ["Symbol","Status","Recommendation","P&L %","Weight %","Updated At","Notes","Reason"];
+  const data = rows.map(r => [
+    r.sym,
+    r.statusLabel,
+    r.recommendation,
+    r.pnlPct.toFixed(2),
+    r.weight.toFixed(2),
+    r.updatedAt || "",
+    r.notes || "",
+    r.reason || "",
+  ].map(csvVal).join(","));
+  downloadText([header.map(csvVal).join(","), ...data].join("\n"), "portfolio-review-plan.csv", "text/csv");
+  showToast(`Exported ${rows.length} review decisions`);
 }
 
 let _rebalanceScenario = "trimWeak25";
@@ -3300,25 +3413,63 @@ function clearPortfolio() {
 
 async function fetchPortfolioData() {
   const btn = document.getElementById("fetchPortBtn");
-  btn.disabled = true; btn.textContent = "⟳ Fetching…";
-  for (const h of portfolio) {
-    const yf = h.yf || h.sym + ".NS";
-    await fetchOne(yf, h.sym);
-    renderPortfolio();
-    await sleep(380);
+  if (btn) { btn.disabled = true; btn.textContent = "Fetching..."; }
+  try {
+    await refreshPortPrices({ renderEach: true, delayMs: 380, retryFailed: false });
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Refresh Prices"; }
   }
-  btn.disabled = false; btn.textContent = "⟳ Refresh Prices";
 }
 
-// Silent background refresh — called on load and every 3 min during market hours
-async function refreshPortPrices() {
+let _portRefreshPromise = null;
+
+// Silent background refresh, called on load and every 3 min.
+async function refreshPortPrices(opts = {}) {
   if (!portfolio.length) return;
-  for (const h of portfolio) {
-    const yf = h.yf || h.sym + ".NS";
-    await fetchOne(yf, h.sym);
-    await sleep(300);
+  if (_portRefreshPromise) return _portRefreshPromise;
+
+  const {
+    renderEach = false,
+    delayMs = 300,
+    retryFailed = true,
+    retryDelayMs = 1800,
+  } = opts;
+
+  _portRefreshPromise = (async () => {
+    const failed = [];
+    for (const h of portfolio) {
+      const yf = h.yf || h.sym + ".NS";
+      const ok = await fetchOne(yf, h.sym);
+      if (!ok) failed.push(h);
+      if (renderEach) renderPortfolio();
+      await sleep(delayMs);
+    }
+
+    if (retryFailed && failed.length) {
+      await sleep(retryDelayMs);
+      for (const h of failed) {
+        const yf = h.yf || h.sym + ".NS";
+        await fetchOne(yf, h.sym);
+        await sleep(delayMs);
+      }
+    }
+
+    renderPortfolio();
+  })().finally(() => { _portRefreshPromise = null; });
+
+  return _portRefreshPromise;
+}
+
+function bootPortfolioData() {
+  loadPort();
+  if (!portfolio.length) {
+    renderPortfolioAssistant();
+    return;
   }
   renderPortfolio();
+  hydratePortfolioMetadata();
+  refreshPortPrices({ retryFailed: true, retryDelayMs: 2500 });
+  setTimeout(() => refreshPortPrices({ retryFailed: true, retryDelayMs: 3500 }), 8000);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -4667,7 +4818,6 @@ updatePill();
 setInterval(updatePill, 60000);
 loadDataStatus();
 setInterval(loadDataStatus, 5 * 60 * 1000);
-loadPort();
 loadStockMeta();
 loadReviewStatus();
 loadWatch();
@@ -4678,8 +4828,7 @@ buildAlphaBar("watchAlpha", "setWatchLetter");
 buildAlphaBar("portAlpha",  "setPortLetter");
 renderTech();
 fundReScore();
-renderPortfolioAssistant();
-if (portfolio.length) { renderPortfolio(); hydratePortfolioMetadata(); refreshPortPrices(); }
+bootPortfolioData();
 renderWatchlist();
 checkKiteReturn();
 startScan();
