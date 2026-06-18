@@ -1760,7 +1760,7 @@ function renderFundDetailPanel(s, th) {
   const checks = fundDetailChecks(s, th);
   const checkRows = group => checks.filter(c => c.group === group).map(c => {
     const state = c.unknown ? "unknown" : c.pass ? "pass" : "fail";
-    const mark = c.unknown ? "?" : c.pass ? "Y" : "N";
+    const mark = c.unknown ? "NA" : c.pass ? "Y" : "N";
     return `<div class="fd-check">
       <span class="fd-dot ${state}">${mark}</span>
       <span><div class="fd-check-name">${esc(c.name)}</div><div class="fd-check-note">${esc(c.note)}</div></span>
@@ -1859,7 +1859,7 @@ function renderFund() {
   document.getElementById("fundCt").textContent = `${fundDisp.length} of ${scored.length}`;
 
   function pip(v, tip) {
-    if (v === null) return `<div class="sp load" title="${tip} unavailable">-</div>`;
+    if (v === null) return `<div class="sp load" title="${tip} unavailable">NA</div>`;
     return `<div class="sp ${v?"green":"red"}" title="${tip}">${v?"✓":"✗"}</div>`;
   }
   function chgSpan(val) {
@@ -1885,7 +1885,7 @@ function renderFund() {
       <td><div class="cmp-val">${cmpCell}</div></td>
       <td>${chgSpan(s.live?.chg1d)}<div style="margin-top:3px">${chgSpan(s.live?.chg1m)}</div></td>
       <td><div class="sig-pips">${pip(s.hard.surv,"Not on surveillance")}${pip(s.hard.profit,"Profitable 3+ qtrs")}${pip(s.hard.mcap,"MCap ≥₹"+th.tMcap+"Cr")}${pip(s.hard.promo,"Promoter ≥"+th.tPromo+"%")}</div></td>
-      <td><div class="sig-pips">${pip(s.soft.rev,"Rev ≥"+th.tRev+"%")}${pip(s.soft.profit,"Profit ≥"+th.tProfit+"%")}${pip(s.soft.pe,"PE ≤"+th.tPE+"x")}${pip(s.soft.roe,"ROE ≥"+th.tROE+"%")}</div></td>
+      <td><div class="sig-pips">${pip(s.rev == null ? null : s.soft.rev,"Rev >= "+th.tRev+"%")}${pip(s.profit == null ? null : s.soft.profit,"Profit >= "+th.tProfit+"%")}${pip(s.pe == null ? null : s.soft.pe,"PE <= "+th.tPE+"x")}${pip(s.roe == null ? null : s.soft.roe,"ROE >= "+th.tROE+"%")}</div></td>
       <td><div class="sig-pips">${pip(s.sig.de,s.isNBFC?"D/E ≤7x":"D/E ≤1x")}${pip(s.sig.promo,"Promoter ≥40% stable")}${pip(s.sig.ma,"Price above 50MA & 200MA")}</div></td>
       <td style="text-align:center">
         <div style="font-size:15px;font-weight:700;font-family:var(--mono);color:${scColor}">${sc}<span style="font-size:10px;color:var(--muted)">/10</span></div>
