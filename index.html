@@ -265,11 +265,18 @@ footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted)
 .mf-title{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px}
 .mf-row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
 .mf-field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:100px}
+.mf-symbol-field{position:relative}
 .mf-label{font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
 .mf-input{background:var(--bg3);border:1px solid var(--bdr);border-radius:var(--r2);padding:7px 10px;color:var(--txt);font-family:var(--mono);font-size:12px;outline:none;width:100%}
 select.mf-input{background:#fff;color:var(--txt);font-weight:700}
 .mf-input:focus{border-color:var(--blue2)}
 .mf-input::placeholder{color:var(--muted)}
+.sym-suggest-panel{position:absolute;z-index:80;left:0;right:0;top:calc(100% + 3px);background:#fff;border:1px solid var(--bdr2);border-radius:7px;box-shadow:0 8px 22px rgba(17,24,39,.14);padding:4px;display:none;max-height:190px;overflow:auto}
+.sym-suggest-panel.open{display:block}
+.sym-suggest-item{width:100%;border:0;background:transparent;text-align:left;padding:6px 8px;border-radius:5px;cursor:pointer;font-family:var(--font);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sym-suggest-item:hover{background:#EEF4FF}
+.sym-suggest-sym{font-family:var(--mono);font-size:12px;font-weight:800;color:var(--txt)}
+.sym-suggest-name{font-size:10px;font-weight:600;color:#52627D;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 .port-summary{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
 .ps-card{flex:1;min-width:110px;background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--r);padding:10px 14px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
@@ -575,10 +582,11 @@ select.mf-input{background:#fff;color:var(--txt);font-weight:700}
     <div class="manual-form">
       <div class="mf-title">+ Add stock manually</div>
       <div class="mf-row">
-        <div class="mf-field" style="min-width:120px">
+        <div class="mf-field mf-symbol-field" style="min-width:120px">
           <label class="mf-label">Symbol (NSE)</label>
-          <input class="mf-input" id="mSym" placeholder="e.g. RELIANCE" list="symList" oninput="debounceMSymLookup(this.value)" onchange="debounceMSymLookup(this.value)">
+          <input class="mf-input" id="mSym" placeholder="e.g. RELIANCE" list="symList" oninput="debounceMSymLookup(this.value)" onchange="debounceMSymLookup(this.value)" onblur="setTimeout(hideSymbolSuggestions, 160)">
           <datalist id="symList"></datalist>
+          <div class="sym-suggest-panel" id="symSuggestPanel"></div>
         </div>
         <div class="mf-field" style="min-width:80px">
           <label class="mf-label">Quantity</label>
@@ -1621,8 +1629,42 @@ function setSymListOptions(items) {
   });
 }
 
+function hideSymbolSuggestions() {
+  document.getElementById("symSuggestPanel")?.classList.remove("open");
+}
+
+function chooseSymbolSuggestion(sym) {
+  const input = document.getElementById("mSym");
+  if (input) input.value = sym;
+  clearTimeout(_symSuggestTimer);
+  clearTimeout(_mSymTimer);
+  hideSymbolSuggestions();
+  fetchMSymPrice(sym);
+}
+
+function renderSymbolSuggestions(q, items) {
+  const panel = document.getElementById("symSuggestPanel");
+  if (!panel) return;
+  const rows = [{ sym: q, name: "Use typed symbol" }, ...items]
+    .filter(x => x?.sym)
+    .filter((x, i, arr) => arr.findIndex(y => y.sym === x.sym) === i)
+    .slice(0, 10);
+  if (!q || q.length < 2 || !rows.length) {
+    panel.classList.remove("open");
+    panel.innerHTML = "";
+    return;
+  }
+  panel.innerHTML = rows.map(x => `
+    <button type="button" class="sym-suggest-item" onmousedown="event.preventDefault();chooseSymbolSuggestion('${jsStr(x.sym)}')">
+      <span class="sym-suggest-sym">${esc(x.sym)}</span>
+      <span class="sym-suggest-name">${esc(x.name || "")}</span>
+    </button>`).join("");
+  panel.classList.add("open");
+}
+
 function initSymList() {
   setSymListOptions(UNIVERSE.map(s => ({ sym: s.sym, name: s.name || s.sec })));
+  hideSymbolSuggestions();
 }
 
 function refreshSymList() {
@@ -1640,13 +1682,18 @@ function debounceSymbolSuggestions(raw) {
   clearTimeout(_symSuggestTimer);
   const q = String(raw || "").trim().toUpperCase().replace(/\s+/g, "");
   if (q.length < 2) { initSymList(); return; }
+  renderSymbolSuggestions(q, []);
   _symSuggestTimer = setTimeout(() => loadSymbolSuggestions(q), 180);
 }
 
 async function loadSymbolSuggestions(q) {
   const exch = document.getElementById("mExch")?.value === "BO" ? "BSE" : "NSE";
   const key = `${exch}:${q}`;
-  if (_symSuggestCache[key]) { setSymListOptions(_symSuggestCache[key]); return; }
+  if (_symSuggestCache[key]) {
+    setSymListOptions([{ sym: q, name: "Use typed symbol" }, ..._symSuggestCache[key]]);
+    renderSymbolSuggestions(q, _symSuggestCache[key]);
+    return;
+  }
 
   const localMatches = [
     ...UNIVERSE.filter(s => s.sym.startsWith(q)).map(s => ({ sym: s.sym, name: s.name || s.sec })),
@@ -1654,7 +1701,8 @@ async function loadSymbolSuggestions(q) {
       .filter(s => String(s.tradingsymbol || "").startsWith(q))
       .map(s => ({ sym: s.tradingsymbol, name: s.exchange }))
   ];
-  if (localMatches.length) setSymListOptions(localMatches);
+  setSymListOptions([{ sym: q, name: "Use typed symbol" }, ...localMatches]);
+  renderSymbolSuggestions(q, localMatches);
 
   try {
     const r = await fetch(`/.netlify/functions/symbol-search?q=${encodeURIComponent(q)}&exchange=${exch}&limit=30`);
@@ -1663,9 +1711,11 @@ async function loadSymbolSuggestions(q) {
       const rows = d.symbols.map(s => ({ sym: s.tradingsymbol, name: [s.name, s.exchange].filter(Boolean).join(" - ") }));
       _symSuggestCache[key] = rows.length ? rows : localMatches;
       setSymListOptions(_symSuggestCache[key]);
+      renderSymbolSuggestions(q, _symSuggestCache[key]);
     }
   } catch(e) {
-    if (localMatches.length) setSymListOptions(localMatches);
+    setSymListOptions([{ sym: q, name: "Use typed symbol" }, ...localMatches]);
+    renderSymbolSuggestions(q, localMatches);
   }
 }
 
