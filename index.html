@@ -1661,6 +1661,14 @@ async function loadFundSymbolSuggestions(q) {
       .filter(s => String(s.tradingsymbol || "").startsWith(q))
       .map(s => ({ sym: s.tradingsymbol, name: s.name || s.exchange || exch }))
   ];
+  const exactLocal = localMatches.find(s => s.sym === q);
+
+  if (exactLocal) {
+    _fundSuggestCache[key] = [exactLocal];
+    setFundSymListOptions([exactLocal]);
+    renderFundSuggestions(q, [exactLocal]);
+    return;
+  }
 
   if (_fundSuggestCache[key]) {
     setFundSymListOptions(_fundSuggestCache[key]);
