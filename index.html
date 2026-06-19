@@ -1584,6 +1584,7 @@ function renderFundAssistant(scored, th, counts) {
 
 let _lastFundScored = [];
 let _fundSuggestTimer = null;
+const _fundSuggestCache = {};
 
 function setFundMsg(msg, type = "info") {
   const el = document.getElementById("fundAddMsg");
@@ -1625,19 +1626,50 @@ function debounceFundSymbolSearch(raw) {
   const q = String(raw || "").trim().toUpperCase().replace(/\s+/g, "");
   if (q.length < 2) { hideFundSuggestions(); return; }
   renderFundSuggestions(q, []);
-  _fundSuggestTimer = setTimeout(async () => {
-    const exch = document.getElementById("fundExch")?.value || "NSE";
-    try {
-      const r = await fetch(`/.netlify/functions/symbol-search?q=${encodeURIComponent(q)}&exchange=${exch}&limit=20`);
-      const d = await r.json();
-      const rows = d.ok && Array.isArray(d.symbols)
-        ? d.symbols.map(s => ({ sym: s.tradingsymbol, name: [s.name, s.exchange || exch].filter(Boolean).join(" - ") }))
-        : [];
-      renderFundSuggestions(q, rows);
-    } catch(e) {
-      renderFundSuggestions(q, []);
+  _fundSuggestTimer = setTimeout(() => loadFundSymbolSuggestions(q), 180);
+}
+
+async function loadFundSymbolSuggestions(q) {
+  const exch = document.getElementById("fundExch")?.value || "NSE";
+  const key = `${exch}:${q}`;
+  const localMatches = [
+    ...UNIVERSE.filter(s => s.sym.startsWith(q)).map(s => ({ sym: s.sym, name: s.name || s.sec })),
+    ...allFundStocks().filter(s => s.sym.startsWith(q)).map(s => ({ sym: s.sym, name: s.name || s.sec })),
+    ...(techStocks || [])
+      .filter(s => String(s.tradingsymbol || "").startsWith(q))
+      .map(s => ({ sym: s.tradingsymbol, name: s.name || s.exchange || exch }))
+  ];
+
+  if (_fundSuggestCache[key]) {
+    renderFundSuggestions(q, _fundSuggestCache[key]);
+    return;
+  }
+
+  renderFundSuggestions(q, localMatches);
+
+  try {
+    const r = await fetch(`/.netlify/functions/symbol-search?q=${encodeURIComponent(q)}&exchange=${exch}&limit=20`);
+    const d = await r.json();
+    if (d.ok && Array.isArray(d.symbols)) {
+      const rows = d.symbols.map(s => ({ sym: s.tradingsymbol, name: [s.name, s.exchange || exch].filter(Boolean).join(" - ") }));
+      _fundSuggestCache[key] = rows.length ? rows : await loadFundamentalSymbolFallback(q, exch, localMatches);
+      renderFundSuggestions(q, _fundSuggestCache[key]);
     }
-  }, 180);
+  } catch(e) {
+    const rows = await loadFundamentalSymbolFallback(q, exch, localMatches);
+    _fundSuggestCache[key] = rows;
+    renderFundSuggestions(q, rows);
+  }
+}
+
+async function loadFundamentalSymbolFallback(q, exch, localMatches) {
+  if (localMatches.length) return localMatches;
+  try {
+    const r = await fetch(`/.netlify/functions/fundamental-data?symbol=${encodeURIComponent(q)}&exchange=${exch}`);
+    const d = await r.json();
+    if (d.ok && d.sym) return [{ sym: d.sym, name: [d.name, d.sec || exch].filter(Boolean).join(" - ") }];
+  } catch(e) {}
+  return localMatches;
 }
 
 async function addFundamentalSymbol() {
