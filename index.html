@@ -622,7 +622,8 @@ select.mf-input{background:#fff;color:var(--txt);font-weight:700}
       <div class="mf-row">
         <div class="mf-field mf-symbol-field" style="min-width:160px">
           <label class="mf-label">Add symbol to fundamentals</label>
-          <input class="mf-input" id="fundSym" placeholder="e.g. BCG" oninput="debounceFundSymbolSearch(this.value)" onblur="setTimeout(hideFundSuggestions,160)">
+          <input class="mf-input" id="fundSym" placeholder="e.g. BCG" list="fundSymList" oninput="debounceFundSymbolSearch(this.value)" onchange="debounceFundSymbolSearch(this.value)" onfocus="initFundSymList()" onblur="setTimeout(hideFundSuggestions,160)">
+          <datalist id="fundSymList"></datalist>
           <div class="sym-suggest-panel" id="fundSuggestPanel"></div>
         </div>
         <div class="mf-field" style="min-width:110px">
@@ -1586,6 +1587,31 @@ let _lastFundScored = [];
 let _fundSuggestTimer = null;
 const _fundSuggestCache = {};
 
+function setFundSymListOptions(items) {
+  const dl = document.getElementById("fundSymList");
+  if (!dl) return;
+  const seen = new Set();
+  dl.innerHTML = "";
+  (items || []).forEach(item => {
+    const sym = typeof item === "string" ? item : item.sym || item.tradingsymbol;
+    if (!sym || seen.has(sym)) return;
+    seen.add(sym);
+    const o = document.createElement("option");
+    o.value = sym;
+    const name = item.name || item.sec || item.exchange || "";
+    if (name) o.label = `${sym} - ${name}`;
+    dl.appendChild(o);
+  });
+}
+
+function initFundSymList() {
+  const rows = [
+    ...UNIVERSE.map(s => ({ sym: s.sym, name: s.name || s.sec })),
+    ...allFundStocks().map(s => ({ sym: s.sym, name: s.name || s.sec }))
+  ];
+  setFundSymListOptions(rows);
+}
+
 function setFundMsg(msg, type = "info") {
   const el = document.getElementById("fundAddMsg");
   if (!el) return;
@@ -1646,10 +1672,12 @@ async function loadFundSymbolSuggestions(q) {
   ];
 
   if (_fundSuggestCache[key]) {
+    setFundSymListOptions(_fundSuggestCache[key]);
     renderFundSuggestions(q, _fundSuggestCache[key]);
     return;
   }
 
+  setFundSymListOptions([{ sym: q, name: "Use typed symbol" }, ...localMatches]);
   renderFundSuggestions(q, localMatches);
 
   try {
@@ -1658,15 +1686,18 @@ async function loadFundSymbolSuggestions(q) {
     if (d.ok && Array.isArray(d.symbols)) {
       const rows = d.symbols.map(s => ({ sym: s.tradingsymbol, name: [s.name, s.exchange || exch].filter(Boolean).join(" - ") }));
       _fundSuggestCache[key] = rows.length ? rows : await loadFundamentalSymbolFallback(q, exch, localMatches);
+      setFundSymListOptions(_fundSuggestCache[key]);
       renderFundSuggestions(q, _fundSuggestCache[key]);
     } else {
       const rows = await loadFundamentalSymbolFallback(q, exch, localMatches);
       _fundSuggestCache[key] = rows;
+      setFundSymListOptions(rows);
       renderFundSuggestions(q, rows);
     }
   } catch(e) {
     const rows = await loadFundamentalSymbolFallback(q, exch, localMatches);
     _fundSuggestCache[key] = rows;
+    setFundSymListOptions(rows);
     renderFundSuggestions(q, rows);
   }
 }
@@ -5594,6 +5625,7 @@ loadReviewStatus();
 loadCustomFundStocks();
 loadWatch();
 initSymList();
+initFundSymList();
 buildAlphaBar("techAlpha",  "setTechLetter");
 buildAlphaBar("fundAlpha",  "setFundLetter");
 buildAlphaBar("watchAlpha", "setWatchLetter");
