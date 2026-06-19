@@ -274,7 +274,8 @@ td { padding: 9px 10px; vertical-align: middle; }
 .mw-actions{display:flex;gap:7px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
 .mw-status{font-size:10px;font-weight:800;border-radius:999px;padding:5px 9px;border:1px solid #D7E0F2;background:#F7F9FD;color:#334155;line-height:1}
 .mw-grid{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:9px}
-.mw-card{background:#F8FAFC;border:1px solid #D7E0F2;border-radius:9px;padding:10px 11px;min-height:118px;position:relative;overflow:hidden}
+.mw-card{background:#F8FAFC;border:1px solid #D7E0F2;border-radius:9px;padding:11px 12px;min-height:0;position:relative;overflow:hidden;cursor:pointer;transition:border-color .18s,box-shadow .18s,transform .18s}
+.mw-card:hover{box-shadow:0 7px 18px rgba(30,64,120,.1);transform:translateY(-1px)}
 .mw-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:#94A3B8}
 .mw-card.positive{background:#F2FBF7;border-color:#BFE5D4}.mw-card.positive::before{background:var(--green)}
 .mw-card.negative{background:#FFF7F7;border-color:#F5BABA}.mw-card.negative::before{background:var(--red)}
@@ -289,10 +290,10 @@ td { padding: 9px 10px; vertical-align: middle; }
 .mw-meta{font-size:10px;color:#52627D;font-weight:700;margin-bottom:7px}
 .mw-text{font-size:11px;color:#1F2A44;line-height:1.45;font-weight:650}
 .mw-headline{font-size:10px;color:#475569;line-height:1.4;margin-top:7px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.mw-more{margin-top:9px;border-top:1px solid rgba(100,116,139,.22);padding-top:8px;display:none}
-.mw-card.open .mw-more{display:block}
-.mw-detail-btn{margin-top:9px;border:1px solid #B8CAE8;background:#FFFFFF;color:#1D4F91;border-radius:7px;padding:4px 8px;font-size:10px;font-weight:800;cursor:pointer}
-.mw-detail-btn:hover{background:#EEF4FF}
+.mw-more{max-height:0;opacity:0;overflow:hidden;border-top:1px solid transparent;padding-top:0;transition:max-height .24s ease,opacity .18s ease,padding-top .18s ease,border-color .18s ease}
+.mw-card.open .mw-more{max-height:280px;opacity:1;border-top-color:rgba(100,116,139,.22);padding-top:9px;margin-top:9px}
+.mw-detail-btn{margin-top:9px;display:inline-flex;align-items:center;border:1px solid #B8CAE8;background:#FFFFFF;color:#1D4F91;border-radius:7px;padding:4px 8px;font-size:10px;font-weight:800;pointer-events:none}
+.mw-card.open .mw-detail-btn{background:#EEF4FF;color:#0F3A6D}
 .mw-reason{font-size:10px;color:#1F2A44;line-height:1.45;font-weight:700;margin-bottom:7px}
 .mw-news-list{display:flex;flex-direction:column;gap:6px}
 .mw-news-item{border:1px solid #D7E0F2;background:#FFFFFF;border-radius:7px;padding:7px 8px}
@@ -307,7 +308,7 @@ td { padding: 9px 10px; vertical-align: middle; }
 .mw-drawer-title{font-size:20px;font-weight:850;color:#0F172A;line-height:1.1}
 .mw-drawer-sub{font-size:12px;color:#475569;font-weight:650;line-height:1.45;margin-top:5px}
 .mw-drawer-body{padding:14px 16px 18px;display:flex;flex-direction:column;gap:10px}
-.mw-drawer-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.mw-drawer-grid{display:flex;flex-direction:column;gap:10px}
 
 
 /* ── Footer ──────────────────────────────────────────────────────────────── */
@@ -1714,7 +1715,7 @@ function renderFundIntelCard(r) {
       <div class="mw-news-meta">${esc(meta || "Headline evidence")}</div>
     </div>`;
   }).join("");
-  return `<div class="mw-card ${r.impact}" id="mw-card-${esc(r.sym)}">
+  return `<div class="mw-card ${r.impact}" id="mw-card-${esc(r.sym)}" onclick="toggleFundIntelDetails('${esc(r.sym)}')">
     <div class="mw-card-top">
       <div class="mw-sym">${esc(r.sym)}</div>
       <span class="mw-pill">${esc(r.label)}</span>
@@ -1722,7 +1723,7 @@ function renderFundIntelCard(r) {
     <div class="mw-meta">${esc(categoryLine)} - ${r.news.length} item${r.news.length === 1 ? "" : "s"}</div>
     <div class="mw-text">${esc(r.readout)}</div>
     ${first ? `<div class="mw-headline">${esc(first.title || first.summary || "")}</div>` : ""}
-    <button class="mw-detail-btn" onclick="toggleFundIntelDetails('${esc(r.sym)}')">Why this?</button>
+    <span class="mw-detail-btn">Why this?</span>
     <div class="mw-more">
       <div class="mw-reason">${esc(r.reason || "No classification explanation available.")}</div>
       <div class="mw-news-list">${newsRows || `<div class="mw-news-item"><div class="mw-news-title">No recent evidence item returned.</div><div class="mw-news-meta">Run Scan Watch again later for fresh signals.</div></div>`}</div>
