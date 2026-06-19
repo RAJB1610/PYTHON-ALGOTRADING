@@ -1634,22 +1634,13 @@ function chooseFundSuggestion(sym) {
 function renderFundSuggestions(q, items) {
   const panel = document.getElementById("fundSuggestPanel");
   if (!panel) return;
-  const cleanItems = (items || [])
+  const rows = (items || [])
     .filter(x => x?.sym)
-    .filter((x, i, arr) => arr.findIndex(y => y.sym === x.sym) === i);
-  const hasExact = cleanItems.some(x => x.sym === q);
-  const rows = [
-    ...cleanItems,
-    ...(hasExact ? [] : [{ sym: q, name: "Use typed symbol" }])
-  ]
+    .filter((x, i, arr) => arr.findIndex(y => y.sym === x.sym) === i)
     .slice(0, 10);
-  if (!q || q.length < 2) { panel.classList.remove("open"); panel.innerHTML = ""; return; }
-  panel.innerHTML = rows.map(x => `
-    <button type="button" class="sym-suggest-item" onmousedown="event.preventDefault();chooseFundSuggestion('${jsStr(x.sym)}')">
-      <span class="sym-suggest-sym">${esc(x.sym)}</span>
-      <span class="sym-suggest-name">${esc(x.name || "")}</span>
-    </button>`).join("");
-  panel.classList.add("open");
+  if (rows.length) setFundSymListOptions(rows);
+  panel.classList.remove("open");
+  panel.innerHTML = "";
 }
 
 function debounceFundSymbolSearch(raw) {
@@ -1677,7 +1668,7 @@ async function loadFundSymbolSuggestions(q) {
     return;
   }
 
-  setFundSymListOptions([{ sym: q, name: "Use typed symbol" }, ...localMatches]);
+  setFundSymListOptions(localMatches);
   renderFundSuggestions(q, localMatches);
 
   try {
