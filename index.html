@@ -622,7 +622,7 @@ select.mf-input{background:#fff;color:var(--txt);font-weight:700}
       <div class="mf-row">
         <div class="mf-field mf-symbol-field" style="min-width:160px">
           <label class="mf-label">Add symbol to fundamentals</label>
-          <input class="mf-input" id="fundSym" placeholder="e.g. BCG" list="fundSymList" oninput="debounceFundSymbolSearch(this.value)" onchange="debounceFundSymbolSearch(this.value)" onfocus="initFundSymList()" onblur="setTimeout(hideFundSuggestions,160)">
+          <input class="mf-input" id="fundSym" placeholder="e.g. BCG" list="fundSymList" autocomplete="off" autocapitalize="characters" spellcheck="false" oninput="debounceFundSymbolSearch(this.value)" onchange="debounceFundSymbolSearch(this.value)" onfocus="initFundSymList()" onblur="setTimeout(hideFundSuggestions,160)">
           <datalist id="fundSymList"></datalist>
           <div class="sym-suggest-panel" id="fundSuggestPanel"></div>
         </div>
