@@ -1608,9 +1608,14 @@ function chooseFundSuggestion(sym) {
 function renderFundSuggestions(q, items) {
   const panel = document.getElementById("fundSuggestPanel");
   if (!panel) return;
-  const rows = [{ sym: q, name: "Use typed symbol" }, ...items]
+  const cleanItems = (items || [])
     .filter(x => x?.sym)
-    .filter((x, i, arr) => arr.findIndex(y => y.sym === x.sym) === i)
+    .filter((x, i, arr) => arr.findIndex(y => y.sym === x.sym) === i);
+  const hasExact = cleanItems.some(x => x.sym === q);
+  const rows = [
+    ...cleanItems,
+    ...(hasExact ? [] : [{ sym: q, name: "Use typed symbol" }])
+  ]
     .slice(0, 10);
   if (!q || q.length < 2) { panel.classList.remove("open"); panel.innerHTML = ""; return; }
   panel.innerHTML = rows.map(x => `
@@ -1654,6 +1659,10 @@ async function loadFundSymbolSuggestions(q) {
       const rows = d.symbols.map(s => ({ sym: s.tradingsymbol, name: [s.name, s.exchange || exch].filter(Boolean).join(" - ") }));
       _fundSuggestCache[key] = rows.length ? rows : await loadFundamentalSymbolFallback(q, exch, localMatches);
       renderFundSuggestions(q, _fundSuggestCache[key]);
+    } else {
+      const rows = await loadFundamentalSymbolFallback(q, exch, localMatches);
+      _fundSuggestCache[key] = rows;
+      renderFundSuggestions(q, rows);
     }
   } catch(e) {
     const rows = await loadFundamentalSymbolFallback(q, exch, localMatches);
