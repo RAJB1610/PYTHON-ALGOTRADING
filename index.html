@@ -1674,7 +1674,8 @@ async function addFundamentalSymbol() {
     saveCustomFundStocks();
     if (input) input.value = "";
     hideFundSuggestions();
-    setFundMsg(`Added ${row.sym} from Yahoo fundamentals.`, "ok");
+    const missing = ["rev", "profit", "roe", "de", "peOverride"].filter(k => row[k] == null).length;
+    setFundMsg(missing ? `Added ${row.sym}. Yahoo returned limited fundamentals; missing metrics will show as data gaps.` : `Added ${row.sym} from Yahoo fundamentals.`, "ok");
     await fetchOne(row.yf, row.sym);
     renderFund();
   } catch(e) {

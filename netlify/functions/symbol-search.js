@@ -3,10 +3,6 @@ exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers: H, body: "" };
 
   const { SUPABASE_URL, SUPABASE_SERVICE_KEY } = process.env;
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-    return { statusCode: 500, headers: H, body: JSON.stringify({ ok: false, error: "Supabase env vars missing" }) };
-  }
-
   const p = event.queryStringParameters || {};
   const q = String(p.q || "").trim().toUpperCase().replace(/[^A-Z0-9&.-]/g, "");
   const exchange = String(p.exchange || "NSE").toUpperCase() === "BSE" ? "BSE" : "NSE";
@@ -14,6 +10,15 @@ exports.handler = async (event) => {
 
   if (q.length < 1) {
     return { statusCode: 200, headers: H, body: JSON.stringify({ ok: true, symbols: [] }) };
+  }
+
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    try {
+      const symbols = await searchYahoo(q, exchange, limit);
+      return { statusCode: 200, headers: H, body: JSON.stringify({ ok: true, symbols, fallback: "yahoo", reason: "supabase-env-missing" }) };
+    } catch (e) {
+      return { statusCode: 200, headers: H, body: JSON.stringify({ ok: false, error: e.message }) };
+    }
   }
 
   try {
