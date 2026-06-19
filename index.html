@@ -289,6 +289,14 @@ td { padding: 9px 10px; vertical-align: middle; }
 .mw-meta{font-size:10px;color:#52627D;font-weight:700;margin-bottom:7px}
 .mw-text{font-size:11px;color:#1F2A44;line-height:1.45;font-weight:650}
 .mw-headline{font-size:10px;color:#475569;line-height:1.4;margin-top:7px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mw-drawer-panel{position:fixed;top:0;right:0;width:560px;max-width:100vw;height:100vh;background:#F4F7FC;border-left:1px solid var(--bdr);z-index:234;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .26s cubic-bezier(.4,0,.2,1);box-shadow:-8px 0 38px rgba(0,0,0,.16)}
+.mw-drawer-panel.open{transform:translateX(0)}
+.mw-drawer-scroll{flex:1;overflow:auto}
+.mw-drawer-head{padding:17px 18px;border-bottom:1px solid #C8D6EE;background:linear-gradient(135deg,#FFFFFF 0%,#ECFEFF 62%,#F8FAFC 100%);display:flex;align-items:flex-start;gap:12px;position:sticky;top:0;z-index:2;box-shadow:0 6px 18px rgba(30,64,120,.08)}
+.mw-drawer-title{font-size:20px;font-weight:850;color:#0F172A;line-height:1.1}
+.mw-drawer-sub{font-size:12px;color:#475569;font-weight:650;line-height:1.45;margin-top:5px}
+.mw-drawer-body{padding:14px 16px 18px;display:flex;flex-direction:column;gap:10px}
+.mw-drawer-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
 
 
 /* ── Footer ──────────────────────────────────────────────────────────────── */
@@ -1622,26 +1630,66 @@ function renderFundMarketWatch(scored = _lastFundScored) {
     : _fundIntelResults.length
       ? `${_fundIntelResults.length} stocks, ${totalNews} items`
       : `${Math.min(universe.length, 10)} stocks ready`;
-  const cards = _fundIntelResults.length
-    ? _fundIntelResults.map(renderFundIntelCard).join("")
-    : `<div class="mw-card neutral" style="grid-column:1/-1;min-height:74px">
-        <div class="mw-card-top"><div class="mw-sym">Market Watch Intelligence</div><span class="mw-pill">Ready</span></div>
-        <div class="mw-text">Scan recent news and event headlines for the current fundamentals list. The assistant will flag corporate actions, deal/order news, results, regulatory items, and unusual risk headlines.</div>
-      </div>`;
 
   el.innerHTML = `<div class="mw-box">
     <div class="mw-head">
       <div>
         <div class="mw-title">Market Watch Intelligence</div>
-        <div class="mw-sub">News, corporate actions, bulk/deal cues, results, and regulatory alerts layered over the fundamentals shortlist.</div>
+        <div class="mw-sub">Open the side pane for news, corporate actions, bulk/deal cues, results, and regulatory alerts.</div>
       </div>
       <div class="mw-actions">
         <span class="mw-status">${esc(status)}</span>
         ${_fundIntelResults.length ? `<span class="mw-status" style="color:var(--green)">${pos} positive</span><span class="mw-status" style="color:var(--red)">${neg} risk</span>` : ""}
+        <button class="btn" style="font-size:11px;padding:6px 12px" onclick="openFundMarketWatchPanel()">Open Watch</button>
         <button class="btn btn-green" style="font-size:11px;padding:6px 12px" onclick="runFundMarketWatch()" ${_fundIntelLoading ? "disabled" : ""}>${_fundIntelLoading ? "Scanning..." : "Scan Watch"}</button>
       </div>
     </div>
-    <div class="mw-grid">${cards}</div>
+  </div>`;
+  renderFundMarketWatchPanel();
+}
+
+function openFundMarketWatchPanel() {
+  const overlay = document.getElementById("mwOverlay");
+  const panel = document.getElementById("marketWatchPanel");
+  if (!overlay || !panel) return;
+  renderFundMarketWatchPanel();
+  overlay.classList.add("open");
+  panel.classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+
+function closeFundMarketWatchPanel() {
+  document.getElementById("mwOverlay")?.classList.remove("open");
+  document.getElementById("marketWatchPanel")?.classList.remove("open");
+  document.body.style.overflow = "";
+}
+
+function renderFundMarketWatchPanel() {
+  const content = document.getElementById("mwContent");
+  if (!content) return;
+  const totalNews = _fundIntelResults.reduce((n, r) => n + (r.news?.length || 0), 0);
+  const neg = _fundIntelResults.filter(r => r.impact === "negative").length;
+  const pos = _fundIntelResults.filter(r => r.impact === "positive").length;
+  const cards = _fundIntelResults.length
+    ? _fundIntelResults.map(renderFundIntelCard).join("")
+    : `<div class="mw-card neutral" style="grid-column:1/-1;min-height:90px">
+        <div class="mw-card-top"><div class="mw-sym">Ready to scan</div><span class="mw-pill">Market Watch</span></div>
+        <div class="mw-text">Use Scan Watch to check recent news and event headlines for the current fundamentals shortlist.</div>
+      </div>`;
+  content.innerHTML = `<div class="mw-drawer-head">
+    <div style="flex:1;min-width:0">
+      <div class="mw-drawer-title">Market Watch Intelligence</div>
+      <div class="mw-drawer-sub">News, corporate actions, bulk/block deal cues, results, and regulatory risk layered over your fundamentals shortlist.</div>
+    </div>
+    <button class="fd-close" onclick="closeFundMarketWatchPanel()">x</button>
+  </div>
+  <div class="mw-drawer-body">
+    <div class="mw-actions" style="justify-content:flex-start">
+      <span class="mw-status">${_fundIntelLoading ? "Scanning..." : _fundIntelResults.length ? `${_fundIntelResults.length} stocks, ${totalNews} items` : "Not scanned"}</span>
+      ${_fundIntelResults.length ? `<span class="mw-status" style="color:var(--green)">${pos} positive</span><span class="mw-status" style="color:var(--red)">${neg} risk</span>` : ""}
+      <button class="btn btn-green" style="font-size:11px;padding:6px 12px" onclick="runFundMarketWatch()" ${_fundIntelLoading ? "disabled" : ""}>${_fundIntelLoading ? "Scanning..." : "Scan Watch"}</button>
+    </div>
+    <div class="mw-drawer-grid">${cards}</div>
   </div>`;
 }
 
@@ -1684,6 +1732,7 @@ function analyseFundIntel(stock, news) {
 
 async function runFundMarketWatch() {
   if (_fundIntelLoading) return;
+  openFundMarketWatchPanel();
   const universe = [...(_lastFundScored || [])]
     .sort((a,b) => b.sc - a.sc || (b.roe || 0) - (a.roe || 0))
     .slice(0, 10);
@@ -6492,6 +6541,14 @@ setInterval(() => {
 <div id="portfolioAssistantPanel" class="pa-panel">
   <div class="pa-scroll">
     <div id="paContent"></div>
+  </div>
+</div>
+
+<!-- Market Watch Intelligence Drawer -->
+<div id="mwOverlay" class="fd-overlay" onclick="closeFundMarketWatchPanel()"></div>
+<div id="marketWatchPanel" class="mw-drawer-panel">
+  <div class="mw-drawer-scroll">
+    <div id="mwContent"></div>
   </div>
 </div>
 
