@@ -247,22 +247,26 @@ td { padding: 9px 10px; vertical-align: middle; }
 .sl-lbl { font-size: 11px; color: var(--muted); font-weight: 600; }
 .sl-val { font-size: 12px; font-weight: 700; color: var(--green); font-family: var(--mono); }
 .sl-row input[type=range] { width: 100%; accent-color: var(--green); cursor: pointer; }
-.fund-assistant{background:var(--bg2);border:1px solid var(--bdr);border-left:4px solid var(--blue);border-radius:var(--r);padding:12px 14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
-.fund-assistant-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:9px}
-.fund-assistant-title{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.11em}
-.fund-assistant-note{font-size:10px;color:#52627D;font-weight:700}
-.fund-pills{display:flex;gap:6px;flex-wrap:wrap}
-.fund-pill{font-size:10px;font-family:var(--mono);font-weight:800;border:1px solid var(--bdr);border-radius:999px;padding:3px 8px;background:#F7F9FD;color:#334155}
+.fund-assistant{background:linear-gradient(180deg,#FFFFFF 0%,#F7FAFF 100%);border:1px solid #C8D6EE;border-left:4px solid var(--blue);border-radius:10px;padding:14px 14px 15px;margin-bottom:12px;box-shadow:0 8px 22px rgba(30,64,120,.08)}
+.fund-assistant-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:start;margin-bottom:12px}
+.fund-assistant-title{font-size:12px;font-weight:850;color:#263B5E;text-transform:uppercase;letter-spacing:.09em}
+.fund-assistant-note{font-size:11px;color:#475569;font-weight:650;line-height:1.45;margin-top:3px}
+.fund-pills{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.fund-pill{font-size:10px;font-weight:850;border:1px solid var(--bdr);border-radius:999px;padding:5px 9px;background:#F7F9FD;color:#334155;line-height:1}
 .fund-pill.good{background:#D6F0E8;color:var(--green);border-color:#A0D9C5}
 .fund-pill.warn{background:#FAEEDA;color:var(--amber);border-color:#E8C47A}
 .fund-pill.risk{background:#FDEAEA;color:var(--red);border-color:#F5BABA}
-.fund-assistant-grid{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:8px}
-.fund-tile{background:#F7F9FD;border:1px solid var(--bdr);border-radius:8px;padding:8px 10px;min-height:58px}
-.fund-tile.clickable{cursor:pointer;transition:background .12s,border-color .12s,transform .12s}
-.fund-tile.clickable:hover{background:#EEF4FF;border-color:var(--blue2);transform:translateY(-1px)}
-.fund-tile-l{font-size:9px;font-weight:800;color:#384A67;text-transform:uppercase;letter-spacing:.07em}
-.fund-tile-v{font-size:13px;font-weight:800;color:var(--txt);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.fund-tile-s{font-size:10px;color:#52627D;line-height:1.35;margin-top:2px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fund-assistant-grid{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:9px}
+.fund-tile{background:#FFFFFF;border:1px solid #D7E0F2;border-radius:9px;padding:10px 11px;min-height:78px;position:relative;overflow:hidden}
+.fund-tile::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:#94A3B8}
+.fund-tile.good::before{background:var(--green)}
+.fund-tile.warn::before{background:var(--amber)}
+.fund-tile.risk::before{background:var(--red)}
+.fund-tile.clickable{cursor:pointer;transition:background .12s,border-color .12s,transform .12s,box-shadow .12s}
+.fund-tile.clickable:hover{background:#F8FBFF;border-color:var(--blue2);transform:translateY(-1px);box-shadow:0 6px 16px rgba(30,64,120,.1)}
+.fund-tile-l{font-size:9px;font-weight:850;color:#52627D;text-transform:uppercase;letter-spacing:.08em}
+.fund-tile-v{font-size:15px;font-weight:850;color:#0F172A;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
+.fund-tile-s{font-size:11px;color:#475569;line-height:1.4;margin-top:5px;font-weight:650;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 
 /* ── Footer ──────────────────────────────────────────────────────────────── */
 footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted); line-height: 1.8; border-top: 1px solid var(--bdr); }
@@ -373,6 +377,18 @@ select.mf-input{background:#fff;color:var(--txt);font-weight:700}
 .fd-score{font-size:24px;font-weight:850;font-family:var(--mono);line-height:1}
 .fd-score-label{font-size:9px;font-weight:800;color:#52627D;text-transform:uppercase;letter-spacing:.08em}
 .fd-reason{font-size:12.5px;line-height:1.55;color:#1F2A44;padding:10px 14px 13px;font-weight:600}
+.fd-assist{border:1px solid #C8D6EE;border-radius:10px;background:#FFFFFF;padding:12px;box-shadow:0 4px 14px rgba(30,64,120,.06)}
+.fd-assist-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}
+.fd-assist-kicker{font-size:9px;font-weight:850;color:#52627D;text-transform:uppercase;letter-spacing:.09em}
+.fd-assist-title{font-size:15px;font-weight:850;color:#0F172A;line-height:1.25;margin-top:2px}
+.fd-assist-pill{font-size:10px;font-weight:800;border-radius:999px;padding:4px 8px;white-space:nowrap;background:#EEF4FF;color:#1D4F91;border:1px solid #B8CAE8}
+.fd-assist-pill.good{background:var(--green3);color:var(--green);border-color:#A0D9C5}
+.fd-assist-pill.watch{background:var(--amber3);color:var(--amber);border-color:#F3D59C}
+.fd-assist-pill.risk{background:var(--red3);color:var(--red);border-color:#F5BABA}
+.fd-assist-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fd-assist-card{background:#F7F9FD;border:1px solid #D7E0F2;border-radius:8px;padding:9px 10px;min-height:74px}
+.fd-assist-label{font-size:9px;font-weight:850;color:#384A67;text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}
+.fd-assist-text{font-size:12px;line-height:1.5;color:#1F2A44;font-weight:600}
 .fd-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .fd-metric{border:1px solid var(--bdr);border-radius:var(--r2);background:var(--bg3);padding:9px 10px;min-height:62px}
 .fd-ml{font-size:9px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.06em}
@@ -1521,7 +1537,7 @@ function renderFundAssistant(scored, th, counts) {
       <div class="fund-assistant-head">
         <div>
           <div class="fund-assistant-title">Fundamental Assistant</div>
-          <div class="fund-assistant-note">Static quarterly screen · use thresholds to stress-test quality, valuation, and promoter risk.</div>
+          <div class="fund-assistant-note">Quick triage from hard gates, growth, valuation, promoter quality, and balance-sheet rules.</div>
         </div>
         <div class="fund-pills">
           <span class="fund-pill good">${counts.sb + counts.q} pass</span>
@@ -1530,10 +1546,10 @@ function renderFundAssistant(scored, th, counts) {
         </div>
       </div>
       <div class="fund-assistant-grid">
-        ${tile("Best candidate", best?.sym || "-", best ? `${best.label} · ${fundReasons(best, th)}` : "No data", "good")}
-        ${tile("Review risk", risk?.sym || "-", risk ? `${risk.label} · ${fundReasons(risk, th)}` : "No data", "risk")}
-        ${tile("Valuation watch", expensive?.sym || "Clear", expensive ? `PE ${expensive.pe}x exceeds ${th.tPE}x cap` : "No PE breach in current list", expensive ? "warn" : "good")}
-        ${tile("Quality count", String(quality), `Hard pass + ROE >= ${th.tROE}% + stable promoter`, quality ? "good" : "warn")}
+        ${tile("Best setup", best?.sym || "-", best ? `${best.label} - ${fundReasons(best, th)}` : "No qualifying data yet", "good")}
+        ${tile("Needs review", risk?.sym || "-", risk ? `${risk.label} - ${fundReasons(risk, th)}` : "No major hard-gate issue", "risk")}
+        ${tile("Valuation flag", expensive?.sym || "Clear", expensive ? `PE ${expensive.pe}x is above the ${th.tPE}x screen` : "No PE breach in current list", expensive ? "warn" : "good")}
+        ${tile("Quality bench", String(quality), `Hard pass + ROE >= ${th.tROE}% + stable promoter`, quality ? "good" : "warn")}
       </div>
     </div>`;
 
@@ -1757,6 +1773,64 @@ function fundNextActions(s) {
   ];
 }
 
+function fundAssistantRead(s, th) {
+  const gaps = fundDataGaps(s);
+  const good = [];
+  const risks = [];
+  if (s.hardPass) good.push("hard gates are clear");
+  else risks.push("one or more hard gates failed");
+  if (s.rev != null && s.rev >= th.tRev) good.push(`revenue growth ${s.rev}%`);
+  if (s.profit != null && s.profit >= th.tProfit) good.push(`profit growth ${s.profit}%`);
+  if (s.roe != null && s.roe >= th.tROE) good.push(`ROE ${s.roe}%`);
+  if (s.pe != null && s.pe <= th.tPE) good.push(`PE ${s.pe}x within screen`);
+  if (s.promoT === "stable" && Number(s.promo) >= th.tPromo) good.push(`promoter holding ${s.promo}% stable`);
+  if (s.rev != null && s.rev < th.tRev) risks.push(`revenue growth below ${th.tRev}%`);
+  if (s.profit != null && s.profit < th.tProfit) risks.push(`profit growth below ${th.tProfit}%`);
+  if (s.roe != null && s.roe < th.tROE) risks.push(`ROE below ${th.tROE}%`);
+  if (s.pe != null && s.pe > th.tPE) risks.push(`PE ${s.pe}x is above ${th.tPE}x screen`);
+  if (s.promoT === "declining") risks.push("promoter holding is declining");
+  if (s.surv) risks.push("surveillance flag is present");
+  if (gaps.length) risks.push(`missing ${gaps.slice(0, 3).join(", ")}`);
+
+  const debtLabel = s.isNBFC ? "NBFC leverage" : "debt/equity";
+  const leverage = s.de == null ? `${debtLabel} data is unavailable` : `${debtLabel} is ${s.de}x`;
+  const valuation = s.pe == null
+    ? "Valuation cannot be judged until PE is available."
+    : s.pe <= th.tPE
+      ? `PE ${s.pe}x is inside the current <= ${th.tPE}x screen.`
+      : `PE ${s.pe}x is above the current <= ${th.tPE}x screen, so require stronger growth or a better entry.`;
+  const title = !s.hardPass
+    ? "Avoid fresh capital until hard-gate issues are resolved."
+    : s.sc >= 7
+      ? "Quality screen is strong; verify valuation and timing."
+      : s.sc >= 5
+        ? "Candidate is usable, but needs selective follow-up."
+        : "Weak setup; keep it on watch until metrics improve.";
+  const tone = !s.hardPass || s.sc < 3 ? "risk" : s.sc >= 7 ? "good" : "watch";
+  const action = !s.hardPass
+    ? "Do not add. Recheck filings, surveillance status, and latest quarter first."
+    : s.sc >= 7
+      ? "Consider only after peer comparison and position sizing checks."
+      : s.sc >= 5
+        ? "Watch or small allocation only after confirming the weak points."
+        : "Avoid averaging down; wait for growth, ROE, or valuation to improve.";
+  const verify = gaps.length
+    ? `Verify missing data: ${gaps.slice(0, 4).join(", ")}.`
+    : "Verify latest results, promoter pledge/change, and sector peer valuation.";
+
+  return {
+    tone,
+    title,
+    pill: s.label,
+    positives: good.length ? good.slice(0, 4).join("; ") + "." : "No clear fundamental strengths from this screen yet.",
+    risks: risks.length ? risks.slice(0, 4).join("; ") + "." : "No major rule-based risk triggered in this screen.",
+    valuation,
+    leverage,
+    action,
+    verify
+  };
+}
+
 function renderFundDetailPanel(s, th) {
   const gaps = fundDataGaps(s);
   const heroCls = !s.hardPass || s.sc < 3 ? "risk" : s.sc >= 7 ? "good" : "watch";
@@ -1775,6 +1849,8 @@ function renderFundDetailPanel(s, th) {
   const actions = fundNextActions(s).map(a => `<div class="pa-item"><span class="pa-dot"></span><span>${esc(a)}</span></div>`).join("");
   const liveCmp = s.live?.cmp ? "Rs " + fmtCmp(s.live.cmp) : "NA";
   const chg = s.live?.chg1d == null ? "1D NA" : `1D ${s.live.chg1d >= 0 ? "+" : ""}${s.live.chg1d.toFixed(1)}%`;
+  const assist = fundAssistantRead(s, th);
+  const assistCard = (label, text) => `<div class="fd-assist-card"><div class="fd-assist-label">${esc(label)}</div><div class="fd-assist-text">${esc(text)}</div></div>`;
 
   return `<div class="fd-hdr">
     <div style="flex:1;min-width:0">
@@ -1801,6 +1877,24 @@ function renderFundDetailPanel(s, th) {
         </div>
       </div>
       <div class="fd-reason">${esc(fundReasons(s, th))}</div>
+    </div>
+
+    <div class="fd-assist">
+      <div class="fd-assist-head">
+        <div>
+          <div class="fd-assist-kicker">Assisted fundamental read</div>
+          <div class="fd-assist-title">${esc(assist.title)}</div>
+        </div>
+        <span class="fd-assist-pill ${assist.tone}">${esc(assist.pill)}</span>
+      </div>
+      <div class="fd-assist-grid">
+        ${assistCard("Positives", assist.positives)}
+        ${assistCard("Risks", assist.risks)}
+        ${assistCard("Valuation", assist.valuation)}
+        ${assistCard("Balance Sheet", assist.leverage)}
+        ${assistCard("Suggested Action", assist.action)}
+        ${assistCard("Verify Next", assist.verify)}
+      </div>
     </div>
 
     <div class="fd-grid">
