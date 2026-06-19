@@ -356,28 +356,28 @@ select.mf-input{background:#fff;color:var(--txt);font-weight:700}
 .ab-text{font-size:12px;line-height:1.7;color:var(--txt)}
 .fd-overlay{position:fixed;inset:0;background:rgba(17,24,39,.42);z-index:235;opacity:0;transition:opacity .22s;pointer-events:none;backdrop-filter:blur(2px)}
 .fd-overlay.open{opacity:1;pointer-events:auto}
-.fd-panel{position:fixed;top:0;right:0;width:500px;max-width:100vw;height:100vh;background:var(--bg2);border-left:1px solid var(--bdr);z-index:236;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .26s cubic-bezier(.4,0,.2,1);box-shadow:-8px 0 38px rgba(0,0,0,.16)}
+.fd-panel{position:fixed;top:0;right:0;width:520px;max-width:100vw;height:100vh;background:#F4F7FC;border-left:1px solid var(--bdr);z-index:236;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .26s cubic-bezier(.4,0,.2,1);box-shadow:-8px 0 38px rgba(0,0,0,.16)}
 .fd-panel.open{transform:translateX(0)}
 .fd-scroll{flex:1;overflow:auto}
-.fd-hdr{padding:16px 18px;border-bottom:1px solid var(--bdr);background:linear-gradient(180deg,#F8FBFF 0%,#EEF4FF 100%);display:flex;align-items:flex-start;gap:12px;position:sticky;top:0;z-index:2}
+.fd-hdr{padding:17px 18px;border-bottom:1px solid #C8D6EE;background:linear-gradient(135deg,#FFFFFF 0%,#EDF5FF 62%,#F8FAFC 100%);display:flex;align-items:flex-start;gap:12px;position:sticky;top:0;z-index:2;box-shadow:0 6px 18px rgba(30,64,120,.08)}
 .fd-title{font-size:22px;font-weight:850;letter-spacing:0;line-height:1.05;color:#0F172A}
 .fd-sub{font-size:12px;color:#334155;margin-top:5px;line-height:1.45;font-weight:650}
 .fd-meta-line{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:9px}
 .fd-meta-chip{font-size:11px;color:#263B5E;background:#FFFFFF;border:1px solid #D7E0F2;border-radius:999px;padding:4px 8px;font-weight:700;line-height:1}
 .fd-close{background:#FFFFFF;border:1px solid var(--bdr);border-radius:8px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#334155;font-size:15px;flex-shrink:0}
 .fd-close:hover{background:var(--red3);color:var(--red);border-color:#F5BABA}
-.fd-body{padding:14px 16px 18px;display:flex;flex-direction:column;gap:12px}
-.fd-hero{border:1px solid #C8D6EE;border-left:0;border-radius:10px;padding:0;background:#FFFFFF;overflow:hidden;box-shadow:0 8px 22px rgba(30,64,120,.08)}
+.fd-body{padding:16px 16px 20px;display:flex;flex-direction:column;gap:14px}
+.fd-hero{border:1px solid #C8D6EE;border-left:0;border-radius:12px;padding:0;background:#FFFFFF;overflow:hidden;box-shadow:0 10px 26px rgba(30,64,120,.1)}
 .fd-hero.risk{border-top:4px solid var(--red2)}
 .fd-hero.good{border-top:4px solid var(--green2)}
 .fd-hero.watch{border-top:4px solid var(--amber2)}
-.fd-hero-top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 14px 11px;background:linear-gradient(180deg,#FFFFFF 0%,#F7FAFF 100%);border-bottom:1px solid #E0E8F7;margin-bottom:0}
+.fd-hero-top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:14px 15px 12px;background:linear-gradient(135deg,#FFFFFF 0%,#F7FAFF 58%,#EEF4FF 100%);border-bottom:1px solid #E0E8F7;margin-bottom:0}
 .fd-verdict{font-size:16px;font-weight:850;color:#0F172A;line-height:1.15}
 .fd-score-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:78px}
 .fd-score{font-size:24px;font-weight:850;font-family:var(--mono);line-height:1}
 .fd-score-label{font-size:9px;font-weight:800;color:#52627D;text-transform:uppercase;letter-spacing:.08em}
-.fd-reason{font-size:12.5px;line-height:1.55;color:#1F2A44;padding:10px 14px 13px;font-weight:600}
-.fd-assist{border:1px solid #C8D6EE;border-radius:10px;background:#FFFFFF;padding:12px;box-shadow:0 4px 14px rgba(30,64,120,.06)}
+.fd-reason{font-size:12.5px;line-height:1.55;color:#1F2A44;padding:11px 15px 13px;font-weight:650;background:#FFFFFF}
+.fd-assist{border:1px solid #C8D6EE;border-radius:12px;background:#FFFFFF;padding:13px;box-shadow:0 8px 22px rgba(30,64,120,.08)}
 .fd-assist-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}
 .fd-assist-kicker{font-size:9px;font-weight:850;color:#52627D;text-transform:uppercase;letter-spacing:.09em}
 .fd-assist-title{font-size:15px;font-weight:850;color:#0F172A;line-height:1.25;margin-top:2px}
@@ -385,18 +385,35 @@ select.mf-input{background:#fff;color:var(--txt);font-weight:700}
 .fd-assist-pill.good{background:var(--green3);color:var(--green);border-color:#A0D9C5}
 .fd-assist-pill.watch{background:var(--amber3);color:var(--amber);border-color:#F3D59C}
 .fd-assist-pill.risk{background:var(--red3);color:var(--red);border-color:#F5BABA}
-.fd-assist-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.fd-assist-card{background:#F7F9FD;border:1px solid #D7E0F2;border-radius:8px;padding:9px 10px;min-height:74px}
-.fd-assist-label{font-size:9px;font-weight:850;color:#384A67;text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}
+.fd-assist-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.fd-assist-card{background:#F8FAFC;border:1px solid #D7E0F2;border-radius:9px;padding:10px 11px;min-height:82px;position:relative;overflow:hidden}
+.fd-assist-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:#94A3B8}
+.fd-assist-card.good{background:#F2FBF7;border-color:#BFE5D4}
+.fd-assist-card.good::before{background:var(--green)}
+.fd-assist-card.risk{background:#FFF7F7;border-color:#F5BABA}
+.fd-assist-card.risk::before{background:var(--red)}
+.fd-assist-card.warn{background:#FFF9EC;border-color:#E8C47A}
+.fd-assist-card.warn::before{background:var(--amber)}
+.fd-assist-card.action{background:#F5F9FF;border-color:#B8CAE8}
+.fd-assist-card.action::before{background:var(--blue)}
+.fd-assist-label{font-size:9px;font-weight:850;color:#384A67;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
 .fd-assist-text{font-size:12px;line-height:1.5;color:#1F2A44;font-weight:600}
-.fd-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.fd-metric{border:1px solid var(--bdr);border-radius:var(--r2);background:var(--bg3);padding:9px 10px;min-height:62px}
+.fd-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.fd-metric{border:1px solid #D7E0F2;border-radius:10px;background:#FFFFFF;padding:10px 11px;min-height:66px;position:relative;overflow:hidden}
+.fd-metric::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:#94A3B8}
+.fd-metric.pe::before{background:var(--amber)}
+.fd-metric.roe::before{background:var(--green)}
+.fd-metric.growth::before{background:var(--blue)}
+.fd-metric.promoter::before{background:#7C3AED}
+.fd-metric.debt::before{background:#0891B2}
+.fd-metric.mcap::before{background:#64748B}
 .fd-ml{font-size:9px;font-weight:800;color:#334155;text-transform:uppercase;letter-spacing:.06em}
 .fd-mv{font-size:14px;font-weight:800;font-family:var(--mono);margin-top:4px;line-height:1.2;color:var(--txt)}
 .fd-ms{font-size:11px;color:#334155;line-height:1.35;margin-top:2px;font-weight:700}
-.fd-section{border:1px solid var(--bdr);border-radius:var(--r);padding:12px;background:var(--bg2)}
-.fd-section-title{font-size:11px;font-weight:800;color:#263B5E;text-transform:uppercase;letter-spacing:.07em;margin-bottom:10px}
+.fd-section{border:1px solid #C8D6EE;border-radius:12px;padding:0;background:#FFFFFF;overflow:hidden}
+.fd-section-title{font-size:11px;font-weight:850;color:#263B5E;text-transform:uppercase;letter-spacing:.07em;margin-bottom:0;padding:10px 12px;background:#F7FAFF;border-bottom:1px solid #E0E8F7}
 .fd-checks{display:flex;flex-direction:column;gap:8px}
+.fd-checks,.fd-section .ab-text,.fd-section .pa-list{padding:11px 12px}
 .fd-check{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:9px;align-items:start;font-family:var(--font);font-size:13px;line-height:1.42}
 .fd-dot{width:18px;height:18px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;font-family:var(--mono);background:var(--bg4);color:var(--muted);border:1px solid var(--bdr);margin-top:1px}
 .fd-dot.pass{background:var(--green3);color:var(--green);border-color:#A0D9C5}
@@ -1845,12 +1862,12 @@ function renderFundDetailPanel(s, th) {
       <span class="fd-th">${esc(c.th)}</span>
     </div>`;
   }).join("");
-  const metric = (label, value, sub, color = "") => `<div class="fd-metric"><div class="fd-ml">${esc(label)}</div><div class="fd-mv" style="${color ? `color:${color}` : ""}">${esc(value)}</div><div class="fd-ms">${esc(sub || "")}</div></div>`;
+  const metric = (label, value, sub, color = "", cls = "") => `<div class="fd-metric ${cls}"><div class="fd-ml">${esc(label)}</div><div class="fd-mv" style="${color ? `color:${color}` : ""}">${esc(value)}</div><div class="fd-ms">${esc(sub || "")}</div></div>`;
   const actions = fundNextActions(s).map(a => `<div class="pa-item"><span class="pa-dot"></span><span>${esc(a)}</span></div>`).join("");
   const liveCmp = s.live?.cmp ? "Rs " + fmtCmp(s.live.cmp) : "NA";
   const chg = s.live?.chg1d == null ? "1D NA" : `1D ${s.live.chg1d >= 0 ? "+" : ""}${s.live.chg1d.toFixed(1)}%`;
   const assist = fundAssistantRead(s, th);
-  const assistCard = (label, text) => `<div class="fd-assist-card"><div class="fd-assist-label">${esc(label)}</div><div class="fd-assist-text">${esc(text)}</div></div>`;
+  const assistCard = (label, text, cls = "") => `<div class="fd-assist-card ${cls}"><div class="fd-assist-label">${esc(label)}</div><div class="fd-assist-text">${esc(text)}</div></div>`;
 
   return `<div class="fd-hdr">
     <div style="flex:1;min-width:0">
@@ -1888,22 +1905,22 @@ function renderFundDetailPanel(s, th) {
         <span class="fd-assist-pill ${assist.tone}">${esc(assist.pill)}</span>
       </div>
       <div class="fd-assist-grid">
-        ${assistCard("Positives", assist.positives)}
-        ${assistCard("Risks", assist.risks)}
-        ${assistCard("Valuation", assist.valuation)}
-        ${assistCard("Balance Sheet", assist.leverage)}
-        ${assistCard("Suggested Action", assist.action)}
-        ${assistCard("Verify Next", assist.verify)}
+        ${assistCard("Positives", assist.positives, "good")}
+        ${assistCard("Risks", assist.risks, "risk")}
+        ${assistCard("Valuation", assist.valuation, s.pe != null && s.pe <= th.tPE ? "good" : "warn")}
+        ${assistCard("Balance Sheet", assist.leverage, s.sig.de ? "good" : "warn")}
+        ${assistCard("Suggested Action", assist.action, "action")}
+        ${assistCard("Verify Next", assist.verify, "action")}
       </div>
     </div>
 
     <div class="fd-grid">
-      ${metric("PE", fundMetricValue(s.pe, "x"), `Limit <= ${th.tPE}x`, s.pe != null && s.pe <= th.tPE ? "var(--green)" : s.pe == null ? "var(--muted)" : "var(--red)")}
-      ${metric("ROE", fundMetricValue(s.roe, "%"), `Target >= ${th.tROE}%`, s.roe != null && s.roe >= th.tROE ? "var(--green)" : s.roe == null ? "var(--muted)" : "var(--red)")}
-      ${metric("Growth", `${fundMetricValue(s.rev, "%")} / ${fundMetricValue(s.profit, "%")}`, "Revenue / profit growth")}
-      ${metric("Promoter", s.promoT === "na" ? "NA" : `${s.promo}%`, s.promoT === "na" ? "Trend unavailable" : s.promoT)}
-      ${metric("Debt", fundMetricValue(s.de, "x"), s.isNBFC ? "NBFC leverage rule" : "Non-NBFC leverage rule")}
-      ${metric("Market cap", s.live?.mcapCr ? fmtMcap(s.live.mcapCr) : s.mcapCr ? fmtMcap(s.mcapCr) : "NA", "Minimum screen size")}
+      ${metric("PE", fundMetricValue(s.pe, "x"), `Limit <= ${th.tPE}x`, s.pe != null && s.pe <= th.tPE ? "var(--green)" : s.pe == null ? "var(--muted)" : "var(--red)", "pe")}
+      ${metric("ROE", fundMetricValue(s.roe, "%"), `Target >= ${th.tROE}%`, s.roe != null && s.roe >= th.tROE ? "var(--green)" : s.roe == null ? "var(--muted)" : "var(--red)", "roe")}
+      ${metric("Growth", `${fundMetricValue(s.rev, "%")} / ${fundMetricValue(s.profit, "%")}`, "Revenue / profit growth", "", "growth")}
+      ${metric("Promoter", s.promoT === "na" ? "NA" : `${s.promo}%`, s.promoT === "na" ? "Trend unavailable" : s.promoT, "", "promoter")}
+      ${metric("Debt", fundMetricValue(s.de, "x"), s.isNBFC ? "NBFC leverage rule" : "Non-NBFC leverage rule", "", "debt")}
+      ${metric("Market cap", s.live?.mcapCr ? fmtMcap(s.live.mcapCr) : s.mcapCr ? fmtMcap(s.mcapCr) : "NA", "Minimum screen size", "", "mcap")}
     </div>
 
     <div class="fd-section"><div class="fd-section-title">Hard Gates</div><div class="fd-checks">${checkRows("Hard")}</div></div>
