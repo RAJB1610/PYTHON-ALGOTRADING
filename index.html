@@ -289,6 +289,15 @@ td { padding: 9px 10px; vertical-align: middle; }
 .mw-meta{font-size:10px;color:#52627D;font-weight:700;margin-bottom:7px}
 .mw-text{font-size:11px;color:#1F2A44;line-height:1.45;font-weight:650}
 .mw-headline{font-size:10px;color:#475569;line-height:1.4;margin-top:7px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mw-more{margin-top:9px;border-top:1px solid rgba(100,116,139,.22);padding-top:8px;display:none}
+.mw-card.open .mw-more{display:block}
+.mw-detail-btn{margin-top:9px;border:1px solid #B8CAE8;background:#FFFFFF;color:#1D4F91;border-radius:7px;padding:4px 8px;font-size:10px;font-weight:800;cursor:pointer}
+.mw-detail-btn:hover{background:#EEF4FF}
+.mw-reason{font-size:10px;color:#1F2A44;line-height:1.45;font-weight:700;margin-bottom:7px}
+.mw-news-list{display:flex;flex-direction:column;gap:6px}
+.mw-news-item{border:1px solid #D7E0F2;background:#FFFFFF;border-radius:7px;padding:7px 8px}
+.mw-news-title{font-size:10px;color:#0F172A;font-weight:800;line-height:1.35}
+.mw-news-meta{font-size:9px;color:#52627D;font-weight:700;margin-top:3px}
 .mw-drawer-panel{position:fixed;top:0;right:0;width:560px;max-width:100vw;height:100vh;background:#F4F7FC;border-left:1px solid var(--bdr);z-index:234;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .26s cubic-bezier(.4,0,.2,1);box-shadow:-8px 0 38px rgba(0,0,0,.16)}
 .mw-drawer-panel.open{transform:translateX(0)}
 .mw-overlay{position:fixed;inset:0;background:rgba(17,24,39,.38);z-index:233;opacity:0;transition:opacity .22s;pointer-events:none}
@@ -1698,15 +1707,31 @@ function renderFundMarketWatchPanel() {
 function renderFundIntelCard(r) {
   const first = r.news?.[0] || null;
   const categoryLine = r.categories.length ? r.categories.join(" / ") : "No major event category";
-  return `<div class="mw-card ${r.impact}">
+  const newsRows = (r.news || []).slice(0, 3).map(n => {
+    const meta = [n.category, n.sentiment, n.source, n.date].filter(Boolean).join(" - ");
+    return `<div class="mw-news-item">
+      <div class="mw-news-title">${esc(n.title || n.summary || "Untitled item")}</div>
+      <div class="mw-news-meta">${esc(meta || "Headline evidence")}</div>
+    </div>`;
+  }).join("");
+  return `<div class="mw-card ${r.impact}" id="mw-card-${esc(r.sym)}">
     <div class="mw-card-top">
       <div class="mw-sym">${esc(r.sym)}</div>
       <span class="mw-pill">${esc(r.label)}</span>
     </div>
-    <div class="mw-meta">${esc(categoryLine)} · ${r.news.length} item${r.news.length === 1 ? "" : "s"}</div>
+    <div class="mw-meta">${esc(categoryLine)} - ${r.news.length} item${r.news.length === 1 ? "" : "s"}</div>
     <div class="mw-text">${esc(r.readout)}</div>
     ${first ? `<div class="mw-headline">${esc(first.title || first.summary || "")}</div>` : ""}
+    <button class="mw-detail-btn" onclick="toggleFundIntelDetails('${esc(r.sym)}')">Why this?</button>
+    <div class="mw-more">
+      <div class="mw-reason">${esc(r.reason || "No classification explanation available.")}</div>
+      <div class="mw-news-list">${newsRows || `<div class="mw-news-item"><div class="mw-news-title">No recent evidence item returned.</div><div class="mw-news-meta">Run Scan Watch again later for fresh signals.</div></div>`}</div>
+    </div>
   </div>`;
+}
+
+function toggleFundIntelDetails(sym) {
+  document.getElementById(`mw-card-${sym}`)?.classList.toggle("open");
 }
 
 function analyseFundIntel(stock, news) {
@@ -1716,20 +1741,24 @@ function analyseFundIntel(stock, news) {
   const neg = list.filter(n => n.sentiment === "negative").length;
   const eventHit = list.some(n => /Corporate Action|Deal|Order|Insider|Bulk|Block|Regulatory|Results/i.test(n.category || ""));
   let impact = "quiet", label = "Quiet", readout = "No recent high-signal market watch item found. Continue with fundamental and price checks.";
+  let reason = "No recent classified headline matched the high-signal categories. This is quiet, not automatically bullish.";
   if (neg > 0 || list.some(n => /Regulatory|Insider/i.test(n.category || ""))) {
     impact = "negative";
     label = "Review";
     readout = "Risk headline detected. Check exchange filings and avoid fresh capital until the event is understood.";
+    reason = `Classified as Review because ${neg || "a"} negative headline${neg === 1 ? "" : "s"} or a regulatory/insider event appeared in recent news. Verify the original filing before adding capital.`;
   } else if (pos > 0 && eventHit) {
     impact = "positive";
     label = "Positive";
     readout = "Positive event/news flow supports the thesis. Still verify valuation, liquidity, and result quality.";
+    reason = `Classified as Positive because ${pos} positive headline${pos === 1 ? "" : "s"} overlapped with event categories such as results, corporate action, deal/order, or bulk/block deal.`;
   } else if (list.length) {
     impact = "neutral";
     label = "Monitor";
     readout = "Recent coverage exists but no strong positive or negative trigger was classified.";
+    reason = "Classified as Monitor because recent headlines were found, but sentiment or event category did not meet the positive or review rules.";
   }
-  return { sym: stock.sym, impact, label, readout, categories, news: list.slice(0, 3) };
+  return { sym: stock.sym, impact, label, readout, reason, categories, news: list.slice(0, 3) };
 }
 
 async function runFundMarketWatch() {
