@@ -267,6 +267,29 @@ td { padding: 9px 10px; vertical-align: middle; }
 .fund-tile-l{font-size:9px;font-weight:850;color:#52627D;text-transform:uppercase;letter-spacing:.08em}
 .fund-tile-v{font-size:15px;font-weight:850;color:#0F172A;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15}
 .fund-tile-s{font-size:11px;color:#475569;line-height:1.4;margin-top:5px;font-weight:650;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.mw-box{background:#FFFFFF;border:1px solid #C8D6EE;border-left:4px solid #0891B2;border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:0 8px 22px rgba(30,64,120,.08)}
+.mw-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:start;margin-bottom:12px}
+.mw-title{font-size:12px;font-weight:850;color:#263B5E;text-transform:uppercase;letter-spacing:.09em}
+.mw-sub{font-size:11px;color:#475569;font-weight:650;line-height:1.45;margin-top:3px}
+.mw-actions{display:flex;gap:7px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+.mw-status{font-size:10px;font-weight:800;border-radius:999px;padding:5px 9px;border:1px solid #D7E0F2;background:#F7F9FD;color:#334155;line-height:1}
+.mw-grid{display:grid;grid-template-columns:repeat(4,minmax(160px,1fr));gap:9px}
+.mw-card{background:#F8FAFC;border:1px solid #D7E0F2;border-radius:9px;padding:10px 11px;min-height:118px;position:relative;overflow:hidden}
+.mw-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:#94A3B8}
+.mw-card.positive{background:#F2FBF7;border-color:#BFE5D4}.mw-card.positive::before{background:var(--green)}
+.mw-card.negative{background:#FFF7F7;border-color:#F5BABA}.mw-card.negative::before{background:var(--red)}
+.mw-card.neutral{background:#F5F9FF;border-color:#B8CAE8}.mw-card.neutral::before{background:var(--blue)}
+.mw-card.quiet{background:#FFFFFF;border-color:#D7E0F2}.mw-card.quiet::before{background:#94A3B8}
+.mw-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.mw-sym{font-size:14px;font-weight:850;color:#0F172A;line-height:1.1}
+.mw-pill{font-size:9px;font-weight:850;text-transform:uppercase;letter-spacing:.06em;border-radius:999px;padding:3px 7px;background:#EEF4FF;color:#1D4F91;border:1px solid #B8CAE8;white-space:nowrap}
+.mw-card.positive .mw-pill{background:#D6F0E8;color:var(--green);border-color:#A0D9C5}
+.mw-card.negative .mw-pill{background:#FDEAEA;color:var(--red);border-color:#F5BABA}
+.mw-card.quiet .mw-pill{background:#F3F6FC;color:#64748B;border-color:#D7E0F2}
+.mw-meta{font-size:10px;color:#52627D;font-weight:700;margin-bottom:7px}
+.mw-text{font-size:11px;color:#1F2A44;line-height:1.45;font-weight:650}
+.mw-headline{font-size:10px;color:#475569;line-height:1.4;margin-top:7px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
 
 /* ── Footer ──────────────────────────────────────────────────────────────── */
 footer { text-align: center; padding: 18px; font-size: 10px; color: var(--muted); line-height: 1.8; border-top: 1px solid var(--bdr); }
@@ -641,6 +664,7 @@ select.mf-input{background:#fff;color:var(--txt);font-weight:700}
 
     <div class="summary" id="fundSummary"></div>
     <div id="fundAssistant"></div>
+    <div id="fundMarketWatch"></div>
     <div id="fundAIBox"></div>
     <div class="alpha-bar" id="fundAlpha"></div>
     <div class="tbl-wrap">
@@ -1583,6 +1607,108 @@ function renderFundAssistant(scored, th, counts) {
   });
 }
 
+let _fundIntelLoading = false;
+let _fundIntelResults = [];
+
+function renderFundMarketWatch(scored = _lastFundScored) {
+  const el = document.getElementById("fundMarketWatch");
+  if (!el) return;
+  const universe = [...(scored || [])].sort((a,b) => b.sc - a.sc || (b.roe || 0) - (a.roe || 0));
+  const totalNews = _fundIntelResults.reduce((n, r) => n + (r.news?.length || 0), 0);
+  const neg = _fundIntelResults.filter(r => r.impact === "negative").length;
+  const pos = _fundIntelResults.filter(r => r.impact === "positive").length;
+  const status = _fundIntelLoading
+    ? "Scanning..."
+    : _fundIntelResults.length
+      ? `${_fundIntelResults.length} stocks, ${totalNews} items`
+      : `${Math.min(universe.length, 10)} stocks ready`;
+  const cards = _fundIntelResults.length
+    ? _fundIntelResults.map(renderFundIntelCard).join("")
+    : `<div class="mw-card neutral" style="grid-column:1/-1;min-height:74px">
+        <div class="mw-card-top"><div class="mw-sym">Market Watch Intelligence</div><span class="mw-pill">Ready</span></div>
+        <div class="mw-text">Scan recent news and event headlines for the current fundamentals list. The assistant will flag corporate actions, deal/order news, results, regulatory items, and unusual risk headlines.</div>
+      </div>`;
+
+  el.innerHTML = `<div class="mw-box">
+    <div class="mw-head">
+      <div>
+        <div class="mw-title">Market Watch Intelligence</div>
+        <div class="mw-sub">News, corporate actions, bulk/deal cues, results, and regulatory alerts layered over the fundamentals shortlist.</div>
+      </div>
+      <div class="mw-actions">
+        <span class="mw-status">${esc(status)}</span>
+        ${_fundIntelResults.length ? `<span class="mw-status" style="color:var(--green)">${pos} positive</span><span class="mw-status" style="color:var(--red)">${neg} risk</span>` : ""}
+        <button class="btn btn-green" style="font-size:11px;padding:6px 12px" onclick="runFundMarketWatch()" ${_fundIntelLoading ? "disabled" : ""}>${_fundIntelLoading ? "Scanning..." : "Scan Watch"}</button>
+      </div>
+    </div>
+    <div class="mw-grid">${cards}</div>
+  </div>`;
+}
+
+function renderFundIntelCard(r) {
+  const first = r.news?.[0] || null;
+  const categoryLine = r.categories.length ? r.categories.join(" / ") : "No major event category";
+  return `<div class="mw-card ${r.impact}">
+    <div class="mw-card-top">
+      <div class="mw-sym">${esc(r.sym)}</div>
+      <span class="mw-pill">${esc(r.label)}</span>
+    </div>
+    <div class="mw-meta">${esc(categoryLine)} · ${r.news.length} item${r.news.length === 1 ? "" : "s"}</div>
+    <div class="mw-text">${esc(r.readout)}</div>
+    ${first ? `<div class="mw-headline">${esc(first.title || first.summary || "")}</div>` : ""}
+  </div>`;
+}
+
+function analyseFundIntel(stock, news) {
+  const list = Array.isArray(news) ? news : [];
+  const categories = [...new Set(list.map(n => n.category).filter(Boolean))].slice(0, 3);
+  const pos = list.filter(n => n.sentiment === "positive").length;
+  const neg = list.filter(n => n.sentiment === "negative").length;
+  const eventHit = list.some(n => /Corporate Action|Deal|Order|Insider|Bulk|Block|Regulatory|Results/i.test(n.category || ""));
+  let impact = "quiet", label = "Quiet", readout = "No recent high-signal market watch item found. Continue with fundamental and price checks.";
+  if (neg > 0 || list.some(n => /Regulatory|Insider/i.test(n.category || ""))) {
+    impact = "negative";
+    label = "Review";
+    readout = "Risk headline detected. Check exchange filings and avoid fresh capital until the event is understood.";
+  } else if (pos > 0 && eventHit) {
+    impact = "positive";
+    label = "Positive";
+    readout = "Positive event/news flow supports the thesis. Still verify valuation, liquidity, and result quality.";
+  } else if (list.length) {
+    impact = "neutral";
+    label = "Monitor";
+    readout = "Recent coverage exists but no strong positive or negative trigger was classified.";
+  }
+  return { sym: stock.sym, impact, label, readout, categories, news: list.slice(0, 3) };
+}
+
+async function runFundMarketWatch() {
+  if (_fundIntelLoading) return;
+  const universe = [...(_lastFundScored || [])]
+    .sort((a,b) => b.sc - a.sc || (b.roe || 0) - (a.roe || 0))
+    .slice(0, 10);
+  if (!universe.length) return;
+  _fundIntelLoading = true;
+  _fundIntelResults = [];
+  renderFundMarketWatch(universe);
+  for (const stock of universe) {
+    try {
+      const r = await fetch("/.netlify/functions/stock-news", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ sym: stock.sym, name: stock.name || stock.sec || stock.sym })
+      });
+      const d = await r.json();
+      _fundIntelResults.push(analyseFundIntel(stock, d.ok ? d.news : []));
+    } catch(e) {
+      _fundIntelResults.push(analyseFundIntel(stock, []));
+    }
+    renderFundMarketWatch(universe);
+  }
+  _fundIntelLoading = false;
+  renderFundMarketWatch(universe);
+}
+
 let _lastFundScored = [];
 let _fundSuggestTimer = null;
 const _fundSuggestCache = {};
@@ -2036,6 +2162,7 @@ function renderFund() {
     <div class="sum-card"><div class="sum-n" style="color:var(--muted)">${counts.a}</div><div class="sum-l">Avoid/Fail</div></div>
     <div class="sum-card"><div class="sum-n">${scored.length}</div><div class="sum-l">Total</div></div>`;
   renderFundAssistant(scored, th, counts);
+  renderFundMarketWatch(scored);
 
   const filtered = scored.filter(s => {
     if (fundFilter==="all")     return true;
@@ -4285,6 +4412,7 @@ const NEWS_CAT_META = {
   "All":              { icon:"📰", clr:"#374151",  bg:"#F3F4F6",  border:"#9CA3AF" },
   "Corporate Action": { icon:"🏢", clr:"#5B21B6",  bg:"#EDE9FE",  border:"#7C3AED" },
   "Deal/Order":       { icon:"🤝", clr:"#065F46",  bg:"#D1FAE5",  border:"#059669" },
+  "Bulk/Block Deal":  { icon:"BD", clr:"#0E7490",  bg:"#CFFAFE",  border:"#0891B2" },
   "Insider Trading":  { icon:"👤", clr:"#78350F",  bg:"#FEF3C7",  border:"#D97706" },
   "Results":          { icon:"📊", clr:"#1E3A8A",  bg:"#DBEAFE",  border:"#2563EB" },
   "Analyst":          { icon:"🎯", clr:"#4C1D95",  bg:"#EDE9FE",  border:"#7C3AED" },

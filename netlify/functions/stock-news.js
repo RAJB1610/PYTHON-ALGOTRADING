@@ -4,12 +4,16 @@ exports.handler = async (event) => {
   const H = { "Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"Content-Type","Content-Type":"application/json" };
   if (event.httpMethod === "OPTIONS") return { statusCode:200, headers:H, body:"" };
 
-  let sym;
-  try { sym = JSON.parse(event.body || "{}").sym; }
+  let sym, requestedName;
+  try {
+    const body = JSON.parse(event.body || "{}");
+    sym = body.sym;
+    requestedName = body.name;
+  }
   catch { return { statusCode:400, headers:H, body:JSON.stringify({ ok:false, error:"Bad body" }) }; }
   if (!sym) return { statusCode:400, headers:H, body:JSON.stringify({ ok:false, error:"Missing sym" }) };
 
-  const name = sym.replace(/-(T|BE|Z|N1|BZ|RE\d*-R)$/i, "");
+  const name = String(requestedName || sym).replace(/-(T|BE|Z|N1|BZ|RE\d*-R)$/i, "");
 
   const rssItems = await fetchGoogleNews(name);
   if (!rssItems.length) {
@@ -27,7 +31,7 @@ Headlines are numbered 0 to ${rssItems.length - 1}:
 ${headlineBlock}
 
 Return ONLY a valid JSON array. Each entry MUST include the original index number. No markdown, no text outside the array:
-[{"idx":0,"title":"concise headline under 12 words","category":"Corporate Action|Deal/Order|Insider Trading|Results|Analyst|Regulatory|General","date":"date from headline","summary":"One sentence: what happened and its significance.","sentiment":"positive|negative|neutral","source":"source from headline"}]
+[{"idx":0,"title":"concise headline under 12 words","category":"Corporate Action|Deal/Order|Bulk/Block Deal|Insider Trading|Results|Analyst|Regulatory|General","date":"date from headline","summary":"One sentence: what happened and its significance.","sentiment":"positive|negative|neutral","source":"source from headline"}]
 Include only headlines directly about ${name}. Return 4-6 best items. If none apply, return [].`;
 
   try {
