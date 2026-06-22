@@ -32,10 +32,10 @@ ${headlineBlock}
 
 Return ONLY a valid JSON array. Each entry MUST include the original index number. No markdown, no text outside the array:
 [{"idx":0,"title":"concise headline under 12 words","category":"Corporate Action|Deal/Order|Bulk/Block Deal|Insider Trading|Results|Analyst|Regulatory|General","date":"date from headline","summary":"One sentence: what happened and its significance.","sentiment":"positive|negative|neutral","source":"source from headline"}]
-Include only headlines directly about ${name}. Return 4-6 best items. If none apply, return [].`;
+Include only headlines directly about ${name}. Prefer a balanced set across Corporate Action, Deal/Order, Bulk/Block Deal, Insider Trading, Results, Analyst, Regulatory, and General when present. Return up to 10 best items. If none apply, return [].`;
 
   try {
-    const raw = await generateText(prompt, { maxTokens: 800, timeoutMs: 7000 });
+    const raw = await generateText(prompt, { maxTokens: 1500, timeoutMs: 9000 });
     const items = extractArray(raw);
     const news = items.map(it => ({
       ...it,
@@ -74,7 +74,7 @@ async function fetchGoogleNews(name) {
         try { return new Date(it.rawDate).getTime() > cutoff; }
         catch { return true; }
       });
-      if (fresh.length >= 2) return fresh.slice(0, 8);
+      if (fresh.length >= 2) return fresh.slice(0, 14);
     } catch {}
   }
   return [];
