@@ -37,10 +37,25 @@ Include only headlines directly about ${name}. Prefer a balanced set across Corp
   try {
     const raw = await generateText(prompt, { maxTokens: 1500, timeoutMs: 9000 });
     const items = extractArray(raw);
-    const news = items.map(it => ({
+    const classified = items.map(it => ({
       ...it,
       url: (it.idx !== undefined && urlMap[it.idx]) ? urlMap[it.idx] : ""
     }));
+    const usedIdx = new Set(classified.map(it => Number(it.idx)).filter(Number.isFinite));
+    const supplemental = rssItems
+      .map((it, idx) => ({ it, idx }))
+      .filter(({ idx }) => !usedIdx.has(idx))
+      .map(({ it, idx }) => ({
+        idx,
+        title: it.title,
+        category: "General",
+        date: it.date,
+        summary: "Additional recent source headline for market context.",
+        sentiment: "neutral",
+        source: it.source,
+        url: it.url
+      }));
+    const news = [...classified, ...supplemental].slice(0, 14);
 
     return { statusCode:200, headers:H, body:JSON.stringify({ ok:true, sym, news }) };
   } catch (e) {
