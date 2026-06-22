@@ -294,14 +294,20 @@ td { padding: 9px 10px; vertical-align: middle; }
 .mw-card.open .mw-more{max-height:920px;opacity:1;border-top-color:rgba(100,116,139,.22);padding-top:9px;margin-top:9px}
 .mw-detail-btn{margin-top:9px;display:inline-flex;align-items:center;border:1px solid #B8CAE8;background:#FFFFFF;color:#1D4F91;border-radius:7px;padding:4px 8px;font-size:10px;font-weight:800;pointer-events:none}
 .mw-card.open .mw-detail-btn{background:#EEF4FF;color:#0F3A6D}
-.mw-reason{font-size:10px;color:#1F2A44;line-height:1.45;font-weight:700;margin-bottom:7px}
-.mw-signal-strip{display:flex;gap:5px;flex-wrap:wrap;margin:7px 0}
-.mw-signal-chip{font-size:9px;font-weight:850;color:#263B5E;background:#EEF4FF;border:1px solid #C8D6EE;border-radius:999px;padding:3px 7px}
-.mw-news-list{display:flex;flex-direction:column;gap:6px}
-.mw-news-item{border:1px solid #D7E0F2;background:#FFFFFF;border-radius:7px;padding:7px 8px}
-.mw-news-title{font-size:10px;color:#0F172A;font-weight:800;line-height:1.35}
-.mw-news-impact{font-size:10px;color:#1F2A44;font-weight:650;line-height:1.42;margin-top:5px}
-.mw-news-meta{font-size:9px;color:#52627D;font-weight:700;margin-top:3px}
+.mw-reason{font-size:11px;color:#111827;line-height:1.5;font-weight:750;margin-bottom:8px}
+.mw-signal-strip{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 10px}
+.mw-signal-chip{font-size:10px;font-weight:850;color:#1E3A5F;background:#EAF2FF;border:1px solid #B8CAE8;border-radius:999px;padding:4px 8px}
+.mw-news-list{display:flex;flex-direction:column;gap:8px}
+.mw-news-item{border:1px solid #C8D6EE;border-left:4px solid #64748B;background:#FFFFFF;border-radius:8px;padding:9px 10px;box-shadow:0 2px 7px rgba(30,64,120,.06)}
+.mw-news-item.positive{border-left-color:var(--green);background:#F7FFFB}
+.mw-news-item.negative{border-left-color:var(--red);background:#FFF9F9}
+.mw-news-item.neutral{border-left-color:#64748B;background:#FFFFFF}
+.mw-news-title{font-size:12px;color:#0B1220;font-weight:850;line-height:1.35}
+.mw-news-impact{font-size:11px;color:#263B5E;font-weight:650;line-height:1.45;margin-top:6px}
+.mw-news-meta{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px}
+.mw-news-tag{font-size:9px;color:#334155;background:#EEF2F7;border:1px solid #CBD5E1;border-radius:999px;padding:3px 6px;font-weight:850}
+.mw-news-tag.positive{color:#047857;background:#DDF7EC;border-color:#A0D9C5}
+.mw-news-tag.negative{color:#B91C1C;background:#FDEAEA;border-color:#F5BABA}
 .mw-drawer-panel{position:fixed;top:0;right:0;width:560px;max-width:100vw;height:100vh;background:#F4F7FC;border-left:1px solid var(--bdr);z-index:234;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .26s cubic-bezier(.4,0,.2,1);box-shadow:-8px 0 38px rgba(0,0,0,.16)}
 .mw-drawer-panel.open{transform:translateX(0)}
 .mw-overlay{position:fixed;inset:0;background:rgba(17,24,39,.38);z-index:233;opacity:0;transition:opacity .22s;pointer-events:none}
@@ -1718,12 +1724,17 @@ function renderFundIntelCard(r) {
   }, {});
   const signalChips = Object.entries(categoryCounts).map(([cat, count]) => `<span class="mw-signal-chip">${esc(cat)} ${count}</span>`).join("");
   const newsRows = (r.news || []).map(n => {
-    const meta = [n.category, n.sentiment, n.source, n.date].filter(Boolean).join(" - ");
+    const sentiment = ["positive", "negative", "neutral"].includes(n.sentiment) ? n.sentiment : "neutral";
     const impact = n.impact || n.summary || "Impact not classified. Treat this as context until verified from the source.";
-    return `<div class="mw-news-item">
+    return `<div class="mw-news-item ${sentiment}">
+      <div class="mw-news-meta">
+        ${n.category ? `<span class="mw-news-tag">${esc(n.category)}</span>` : ""}
+        <span class="mw-news-tag ${sentiment}">${esc(sentiment)}</span>
+        ${n.source ? `<span class="mw-news-tag">${esc(n.source)}</span>` : ""}
+        ${n.date ? `<span class="mw-news-tag">${esc(n.date)}</span>` : ""}
+      </div>
       <div class="mw-news-title">${esc(n.title || n.summary || "Untitled item")}</div>
       <div class="mw-news-impact">${esc(impact)}</div>
-      <div class="mw-news-meta">${esc(meta || "Headline evidence")}</div>
     </div>`;
   }).join("");
   return `<div class="mw-card ${r.impact}" id="mw-card-${esc(r.sym)}" onclick="toggleFundIntelDetails('${esc(r.sym)}')">
