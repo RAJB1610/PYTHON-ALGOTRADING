@@ -31,7 +31,7 @@ Headlines are numbered 0 to ${rssItems.length - 1}:
 ${headlineBlock}
 
 Return ONLY a valid JSON array. Each entry MUST include the original index number. No markdown, no text outside the array:
-[{"idx":0,"title":"concise headline under 12 words","category":"Corporate Action|Deal/Order|Bulk/Block Deal|Insider Trading|Results|Analyst|Regulatory|General","date":"date from headline","summary":"One sentence: what happened and its significance.","sentiment":"positive|negative|neutral","source":"source from headline"}]
+[{"idx":0,"title":"concise headline under 12 words","category":"Corporate Action|Deal/Order|Bulk/Block Deal|Insider Trading|Results|Analyst|Regulatory|General","date":"date from headline","summary":"One sentence: what happened and its significance.","impact":"One sentence: how this may affect price, earnings, sentiment, risk, liquidity, or valuation.","sentiment":"positive|negative|neutral","source":"source from headline"}]
 Include only headlines directly about ${name}. Prefer a balanced set across Corporate Action, Deal/Order, Bulk/Block Deal, Insider Trading, Results, Analyst, Regulatory, and General when present. Return up to 10 best items. If none apply, return [].`;
 
   try {
@@ -39,6 +39,7 @@ Include only headlines directly about ${name}. Prefer a balanced set across Corp
     const items = extractArray(raw);
     const classified = items.map(it => ({
       ...it,
+      impact: it.impact || impactFromNews(it),
       url: (it.idx !== undefined && urlMap[it.idx]) ? urlMap[it.idx] : ""
     }));
     const usedIdx = new Set(classified.map(it => Number(it.idx)).filter(Number.isFinite));
@@ -51,6 +52,7 @@ Include only headlines directly about ${name}. Prefer a balanced set across Corp
         category: "General",
         date: it.date,
         summary: "Additional recent source headline for market context.",
+        impact: impactFromNews({ category: "General", sentiment: "neutral", title: it.title }),
         sentiment: "neutral",
         source: it.source,
         url: it.url
@@ -66,6 +68,40 @@ Include only headlines directly about ${name}. Prefer a balanced set across Corp
     };
   }
 };
+
+function impactFromNews(item = {}) {
+  const cat = String(item.category || "General");
+  const sent = String(item.sentiment || "neutral");
+  const sign = sent === "positive" ? "positive" : sent === "negative" ? "negative" : "neutral";
+  if (/Results/i.test(cat)) {
+    return sign === "positive"
+      ? "Results can support earnings confidence and valuation if margins and guidance also hold."
+      : sign === "negative"
+        ? "Results weakness can pressure earnings expectations, valuation multiples, and near-term sentiment."
+        : "Results headline needs numbers checked before judging earnings impact.";
+  }
+  if (/Deal|Order/i.test(cat)) {
+    return sign === "positive"
+      ? "Order or deal flow can support revenue visibility, but execution quality and margins still matter."
+      : "Order or deal news may add uncertainty until size, margin, and execution terms are clear.";
+  }
+  if (/Corporate Action/i.test(cat)) {
+    return "Corporate actions can change liquidity, share count, payouts, or capital structure, so verify the filing.";
+  }
+  if (/Bulk|Block/i.test(cat)) {
+    return "Bulk or block deals can affect ownership signal and short-term liquidity; check buyer, seller, and quantity.";
+  }
+  if (/Insider/i.test(cat)) {
+    return "Insider activity can influence confidence in management intent; verify whether it is buying, selling, or pledge related.";
+  }
+  if (/Regulatory/i.test(cat)) {
+    return "Regulatory news can raise compliance risk and may pressure valuation until the issue is clarified.";
+  }
+  if (/Analyst/i.test(cat)) {
+    return "Analyst commentary can shift sentiment, but it should be checked against fundamentals and valuation.";
+  }
+  return "General market context only; use it as a sentiment clue, not a direct buy or sell trigger.";
+}
 
 async function fetchGoogleNews(name) {
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
