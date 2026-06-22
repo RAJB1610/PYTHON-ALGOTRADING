@@ -477,6 +477,20 @@ select.mf-input{background:#fff;color:var(--txt);font-weight:700}
 .fd-check-note{font-size:11px;color:#475569;margin-top:2px;font-weight:500;line-height:1.35}
 .fd-th{font-size:10px;color:#334155;font-family:var(--mono);white-space:nowrap;font-weight:700;background:#F3F6FC;border:1px solid #D7E0F2;border-radius:6px;padding:2px 6px;margin-top:-1px}
 .fd-actions{display:flex;gap:7px;flex-wrap:wrap}
+.fd-forecast{border:1px solid #B8CAE8;border-radius:12px;background:#FFFFFF;overflow:hidden;box-shadow:0 8px 22px rgba(30,64,120,.08)}
+.fd-forecast-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:12px 13px;background:#F7FAFF;border-bottom:1px solid #E0E8F7}
+.fd-forecast-title{font-size:13px;font-weight:850;color:#0F172A;line-height:1.25}
+.fd-forecast-sub{font-size:11px;color:#475569;font-weight:650;line-height:1.35;margin-top:2px}
+.fd-forecast-body{padding:12px 13px;display:flex;flex-direction:column;gap:10px}
+.fd-target-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.fd-target{border:1px solid #D7E0F2;background:#F8FAFC;border-radius:9px;padding:9px}
+.fd-target-l{font-size:9px;font-weight:850;color:#52627D;text-transform:uppercase;letter-spacing:.07em}
+.fd-target-v{font-size:16px;font-weight:850;color:#0F172A;font-family:var(--mono);margin-top:4px}
+.fd-forecast-summary{font-size:12px;line-height:1.5;color:#1F2A44;font-weight:650}
+.fd-forecast-row{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.fd-forecast-list{border:1px solid #D7E0F2;background:#F8FAFC;border-radius:9px;padding:9px}
+.fd-forecast-list h4{margin:0 0 6px;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:#384A67}
+.fd-forecast-list ul{margin:0;padding-left:17px;font-size:11px;line-height:1.45;color:#263B5E;font-weight:650}
 .insight-row{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;background:var(--bg3);border-radius:var(--r2);margin-bottom:5px;font-size:12px;line-height:1.5}
 .insight-icon{font-size:14px;flex-shrink:0}
 .pa-summary{background:var(--bg2);border:1px solid var(--bdr);border-left:4px solid var(--blue);border-radius:var(--r);padding:12px 14px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.04)}
@@ -2222,6 +2236,19 @@ function renderFundDetailPanel(s, th) {
       </div>
     </div>
 
+    <div class="fd-forecast">
+      <div class="fd-forecast-head">
+        <div>
+          <div class="fd-forecast-title">AI Forecast</div>
+          <div class="fd-forecast-sub">Public-data scenario range using fundamentals, valuation, CMP, and trend context.</div>
+        </div>
+        <button class="btn btn-green" id="forecastBtn-${esc(s.sym)}" onclick="runAIForecast('${jsStr(s.sym)}')" style="font-size:10px;padding:6px 10px">Build Forecast</button>
+      </div>
+      <div class="fd-forecast-body" id="forecastBox-${esc(s.sym)}">
+        <div class="fd-forecast-summary">Run forecast to generate conservative, base, and bull target scenarios. This is not a broker target.</div>
+      </div>
+    </div>
+
     <div class="fd-grid">
       ${metric("PE", fundMetricValue(s.pe, "x"), `Limit <= ${th.tPE}x`, s.pe != null && s.pe <= th.tPE ? "var(--green)" : s.pe == null ? "var(--muted)" : "var(--red)", "pe")}
       ${metric("ROE", fundMetricValue(s.roe, "%"), `Target >= ${th.tROE}%`, s.roe != null && s.roe >= th.tROE ? "var(--green)" : s.roe == null ? "var(--muted)" : "var(--red)", "roe")}
@@ -2247,6 +2274,75 @@ function renderFundDetailPanel(s, th) {
       <div class="ab-text">${esc(s.note || "Rule-based screen generated from available static and live data.")}</div>
     </div>
   </div>`;
+}
+
+async function runAIForecast(sym) {
+  const s = _lastFundScored.find(x => x.sym === sym);
+  if (!s) return;
+  const btn = document.getElementById(`forecastBtn-${sym}`);
+  const box = document.getElementById(`forecastBox-${sym}`);
+  if (!box) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Building..."; }
+  box.innerHTML = `<div class="ai-loading"><div class="ai-spinner"></div><span>Building AI forecast...</span></div>`;
+  try {
+    const stock = {
+      sym: s.sym,
+      name: s.name,
+      sector: s.sec,
+      label: s.label,
+      score: s.sc,
+      sc: s.sc,
+      cmp: s.live?.cmp ?? null,
+      chg1d: s.live?.chg1d ?? null,
+      chg1m: s.live?.chg1m ?? null,
+      maTrend: s.live?.maTrend ?? null,
+      mcapCr: s.live?.mcapCr ?? s.mcapCr ?? null,
+      pe: s.pe,
+      roe: s.roe,
+      rev: s.rev,
+      profit: s.profit,
+      de: s.de,
+      promoter: s.promo,
+      promoterTrend: s.promoT,
+      note: s.note,
+      reasons: fundReasons(s, getThresholds()),
+      dataGaps: fundDataGaps(s)
+    };
+    const res = await fetch("/.netlify/functions/forecast-stock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stock, thresholds: getThresholds() })
+    });
+    const d = await res.json();
+    if (!d.ok) throw new Error(d.error || "Forecast failed");
+    box.innerHTML = renderAIForecastOutput(d.forecast, d.mode);
+  } catch(e) {
+    box.innerHTML = `<div class="insight-row" style="background:var(--red3)"><span class="insight-icon">!</span><span>Error: ${esc(e.message)} <button class="btn" onclick="runAIForecast('${jsStr(sym)}')" style="font-size:10px;margin-left:8px">Retry</button></span></div>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Rebuild Forecast"; }
+  }
+}
+
+function renderAIForecastOutput(f, mode = "") {
+  const target = (label, value) => `<div class="fd-target"><div class="fd-target-l">${esc(label)}</div><div class="fd-target-v">${value == null ? "NA" : "Rs " + fmtCmp(value)}</div></div>`;
+  const list = (title, arr) => `<div class="fd-forecast-list"><h4>${esc(title)}</h4><ul>${(arr || []).map(x => `<li>${esc(x)}</li>`).join("") || "<li>No items returned.</li>"}</ul></div>`;
+  const ret = f.expectedReturnPct == null ? "Return NA" : `${f.expectedReturnPct >= 0 ? "+" : ""}${Number(f.expectedReturnPct).toFixed(1)}% base return`;
+  return `
+    <div class="fd-target-grid">
+      ${target("Conservative", f.conservativeTarget)}
+      ${target("Base", f.baseTarget)}
+      ${target("Bull", f.bullTarget)}
+    </div>
+    <div class="fd-forecast-summary"><strong>${esc(f.action || "Watch")} · ${esc(f.confidence || "Medium")} confidence · ${esc(f.horizon || "6-12 months")} · ${esc(ret)}</strong><br>${esc(f.summary || "")}${mode === "rules" ? " Rule fallback shown because AI is unavailable." : ""}</div>
+    <div class="fd-forecast-row">
+      ${list("Drivers", f.drivers)}
+      ${list("Risks", f.risks)}
+    </div>
+    <div class="fd-forecast-row">
+      ${list("Assumptions", f.assumptions)}
+      ${list("Data Gaps", f.dataGaps)}
+    </div>
+    <div class="fd-forecast-summary"><strong>Method:</strong> ${esc(f.method || "Public-data scenario estimate.")}</div>`;
 }
 
 function renderFund() {
