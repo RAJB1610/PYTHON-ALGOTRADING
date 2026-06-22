@@ -290,24 +290,26 @@ td { padding: 9px 10px; vertical-align: middle; }
 .mw-meta{font-size:10px;color:#52627D;font-weight:700;margin-bottom:7px}
 .mw-text{font-size:11px;color:#1F2A44;line-height:1.45;font-weight:650}
 .mw-headline{font-size:10px;color:#475569;line-height:1.4;margin-top:7px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.mw-more{max-height:0;opacity:0;overflow:hidden;border:1px solid transparent;border-radius:9px;background:#F8FAFC;padding:0 10px;transition:max-height .24s ease,opacity .18s ease,padding .18s ease,border-color .18s ease,margin-top .18s ease}
-.mw-card.open .mw-more{max-height:920px;opacity:1;border-color:#C8D6EE;padding:10px;margin-top:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.8)}
+.mw-more{max-height:0;opacity:0;overflow:hidden;border:1px solid transparent;border-radius:10px;background:#FFFFFF;padding:0;transition:max-height .24s ease,opacity .18s ease,padding .18s ease,border-color .18s ease,margin-top .18s ease}
+.mw-card.open .mw-more{max-height:980px;opacity:1;border-color:#B8CAE8;margin-top:11px;box-shadow:0 8px 20px rgba(30,64,120,.08)}
 .mw-detail-btn{margin-top:9px;display:inline-flex;align-items:center;border:1px solid #B8CAE8;background:#FFFFFF;color:#1D4F91;border-radius:7px;padding:4px 8px;font-size:10px;font-weight:800;pointer-events:none}
 .mw-card.open .mw-detail-btn{background:#EEF4FF;color:#0F3A6D}
-.mw-reason{font-size:11px;color:#111827;line-height:1.5;font-weight:750;margin-bottom:8px;padding:8px 9px;border-left:3px solid #1D4F91;background:#FFFFFF;border-radius:7px}
-.mw-signal-strip{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 10px}
-.mw-signal-chip{font-size:10px;font-weight:850;color:#1E3A5F;background:#EAF2FF;border:1px solid #B8CAE8;border-radius:999px;padding:4px 8px}
-.mw-news-list{display:flex;flex-direction:column;gap:8px}
-.mw-news-item{border:1px solid #CBD5E1;border-left:4px solid #64748B;background:#FFFFFF;border-radius:8px;padding:10px 11px;box-shadow:0 2px 7px rgba(30,64,120,.05)}
-.mw-news-item.positive{border-left-color:var(--green);background:#FFFFFF}
-.mw-news-item.negative{border-left-color:var(--red);background:#FFFFFF}
-.mw-news-item.neutral{border-left-color:#64748B;background:#FFFFFF}
+.mw-brief{padding:12px 13px;border-bottom:1px solid #D7E0F2;background:#F8FAFC}
+.mw-brief-label{font-size:9px;font-weight:850;text-transform:uppercase;letter-spacing:.08em;color:#64748B;margin-bottom:5px}
+.mw-reason{font-size:12px;color:#111827;line-height:1.45;font-weight:750}
+.mw-signal-strip{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.mw-signal-chip{font-size:10px;font-weight:850;color:#1E3A5F;background:#FFFFFF;border:1px solid #B8CAE8;border-radius:999px;padding:4px 8px}
+.mw-news-list{display:flex;flex-direction:column}
+.mw-news-item{display:grid;grid-template-columns:82px minmax(0,1fr);gap:10px;padding:12px 13px;border-top:1px solid #E2E8F0;background:#FFFFFF}
+.mw-news-item:first-child{border-top:0}
+.mw-news-side{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
+.mw-news-sent{font-size:9px;font-weight:850;text-transform:uppercase;border-radius:999px;padding:4px 7px;background:#EEF2F7;color:#475569;border:1px solid #CBD5E1}
+.mw-news-sent.positive{color:#047857;background:#DDF7EC;border-color:#A0D9C5}
+.mw-news-sent.negative{color:#B91C1C;background:#FDEAEA;border-color:#F5BABA}
+.mw-news-date{font-size:10px;color:#64748B;font-weight:750}
 .mw-news-title{font-size:12px;color:#0B1220;font-weight:850;line-height:1.35}
-.mw-news-impact{font-size:11px;color:#263B5E;font-weight:650;line-height:1.45;margin-top:6px}
-.mw-news-meta{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px}
-.mw-news-tag{font-size:9px;color:#334155;background:#EEF2F7;border:1px solid #CBD5E1;border-radius:999px;padding:3px 6px;font-weight:850}
-.mw-news-tag.positive{color:#047857;background:#DDF7EC;border-color:#A0D9C5}
-.mw-news-tag.negative{color:#B91C1C;background:#FDEAEA;border-color:#F5BABA}
+.mw-news-impact{font-size:11px;color:#334155;font-weight:650;line-height:1.45;margin-top:5px}
+.mw-news-meta{font-size:10px;color:#52627D;font-weight:750;margin-top:6px}
 .mw-drawer-panel{position:fixed;top:0;right:0;width:560px;max-width:100vw;height:100vh;background:#F4F7FC;border-left:1px solid var(--bdr);z-index:234;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .26s cubic-bezier(.4,0,.2,1);box-shadow:-8px 0 38px rgba(0,0,0,.16)}
 .mw-drawer-panel.open{transform:translateX(0)}
 .mw-overlay{position:fixed;inset:0;background:rgba(17,24,39,.38);z-index:233;opacity:0;transition:opacity .22s;pointer-events:none}
@@ -1727,14 +1729,15 @@ function renderFundIntelCard(r) {
     const sentiment = ["positive", "negative", "neutral"].includes(n.sentiment) ? n.sentiment : "neutral";
     const impact = n.impact || n.summary || "Impact not classified. Treat this as context until verified from the source.";
     return `<div class="mw-news-item ${sentiment}">
-      <div class="mw-news-meta">
-        ${n.category ? `<span class="mw-news-tag">${esc(n.category)}</span>` : ""}
-        <span class="mw-news-tag ${sentiment}">${esc(sentiment)}</span>
-        ${n.source ? `<span class="mw-news-tag">${esc(n.source)}</span>` : ""}
-        ${n.date ? `<span class="mw-news-tag">${esc(n.date)}</span>` : ""}
+      <div class="mw-news-side">
+        <span class="mw-news-sent ${sentiment}">${esc(sentiment)}</span>
+        ${n.date ? `<span class="mw-news-date">${esc(n.date)}</span>` : ""}
       </div>
-      <div class="mw-news-title">${esc(n.title || n.summary || "Untitled item")}</div>
-      <div class="mw-news-impact">${esc(impact)}</div>
+      <div>
+        <div class="mw-news-title">${esc(n.title || n.summary || "Untitled item")}</div>
+        <div class="mw-news-impact">${esc(impact)}</div>
+        <div class="mw-news-meta">${esc([n.category, n.source].filter(Boolean).join(" - ") || "Headline evidence")}</div>
+      </div>
     </div>`;
   }).join("");
   return `<div class="mw-card ${r.impact}" id="mw-card-${esc(r.sym)}" onclick="toggleFundIntelDetails('${esc(r.sym)}')">
@@ -1747,8 +1750,11 @@ function renderFundIntelCard(r) {
     ${first ? `<div class="mw-headline">${esc(first.title || first.summary || "")}</div>` : ""}
     <span class="mw-detail-btn">Why this?</span>
     <div class="mw-more">
-      <div class="mw-reason">${esc(r.reason || "No classification explanation available.")}</div>
-      ${signalChips ? `<div class="mw-signal-strip">${signalChips}</div>` : ""}
+      <div class="mw-brief">
+        <div class="mw-brief-label">Impact brief</div>
+        <div class="mw-reason">${esc(r.reason || "No classification explanation available.")}</div>
+        ${signalChips ? `<div class="mw-signal-strip">${signalChips}</div>` : ""}
+      </div>
       <div class="mw-news-list">${newsRows || `<div class="mw-news-item"><div class="mw-news-title">No recent evidence item returned.</div><div class="mw-news-meta">Run Scan Watch again later for fresh signals.</div></div>`}</div>
     </div>
   </div>`;
