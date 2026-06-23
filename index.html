@@ -3103,7 +3103,7 @@ function renderPortfolio() {
     const tr = document.createElement("tr");
     tr.style.cursor = "pointer";
     tr.title = `Open ${h.sym} portfolio assistant`;
-    tr.onclick = () => openPortfolioAssistantDrawer(h.sym);
+    tr.dataset.portSym = h.sym;
     tr.innerHTML = `
       <td><div class="sym-name">${h.sym}</div>${yfHint}</td>
       <td style="font-family:var(--mono)">${h.qty.toLocaleString("en-IN")}</td>
@@ -3122,6 +3122,11 @@ function renderPortfolio() {
       <td style="text-align:center"><button class="btn" style="font-size:10px;padding:2px 8px;color:var(--red)" onclick="event.stopPropagation();removeHolding('${h.sym}')">✕</button></td>`;
     tbody.appendChild(tr);
   });
+  tbody.onclick = e => {
+    if (e.target.closest("button, select, input, textarea, a")) return;
+    const row = e.target.closest("tr[data-port-sym]");
+    if (row?.dataset?.portSym) openPortfolioAssistantDrawer(row.dataset.portSym);
+  };
 
   renderRuleAnalysis(totalInvested, totalCurrent, totalPnL, pnlPct);
 }
