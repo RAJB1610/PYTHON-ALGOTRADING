@@ -3105,7 +3105,7 @@ function renderPortfolio() {
     tr.title = `Open ${h.sym} portfolio assistant`;
     tr.dataset.portSym = h.sym;
     tr.innerHTML = `
-      <td><div class="sym-name">${h.sym}</div>${yfHint}</td>
+      <td onclick="event.stopPropagation();openPortfolioAssistantDrawer('${jsStr(h.sym)}')" style="cursor:pointer"><div class="sym-name">${h.sym}</div>${yfHint}</td>
       <td style="font-family:var(--mono)">${h.qty.toLocaleString("en-IN")}</td>
       <td style="font-family:var(--mono)">₹${h.avgPrice.toLocaleString("en-IN")}</td>
       <td style="font-family:var(--mono);font-weight:700">${cmpCell}</td>
