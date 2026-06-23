@@ -2248,18 +2248,7 @@ function renderFundDetailPanel(s, th) {
       </div>
     </div>
 
-    <div class="fd-forecast">
-      <div class="fd-forecast-head">
-        <div>
-          <div class="fd-forecast-title">AI Forecast</div>
-          <div class="fd-forecast-sub">Public-data scenario range using fundamentals, valuation, CMP, and trend context.</div>
-        </div>
-        <button class="btn btn-green" id="forecastBtn-${esc(s.sym)}" onclick="runAIForecast('${jsStr(s.sym)}')" style="font-size:10px;padding:6px 10px">Build Forecast</button>
-      </div>
-      <div class="fd-forecast-body" id="forecastBox-${esc(s.sym)}">
-        <div class="fd-forecast-summary">Run forecast to generate conservative, base, and bull target scenarios. This is not a broker target.</div>
-      </div>
-    </div>
+    ${forecastWidgetHTML(s.sym, "fund")}
 
     <div class="fd-grid">
       ${metric("PE", fundMetricValue(s.pe, "x"), `Limit <= ${th.tPE}x`, s.pe != null && s.pe <= th.tPE ? "var(--green)" : s.pe == null ? "var(--muted)" : "var(--red)", "pe")}
@@ -2288,38 +2277,71 @@ function renderFundDetailPanel(s, th) {
   </div>`;
 }
 
-async function runAIForecast(sym) {
-  const s = _lastFundScored.find(x => x.sym === sym);
-  if (!s) return;
-  const btn = document.getElementById(`forecastBtn-${sym}`);
-  const box = document.getElementById(`forecastBox-${sym}`);
+function forecastWidgetHTML(sym, source = "fund") {
+  const key = forecastKey(sym, source);
+  return `<div class="fd-forecast">
+    <div class="fd-forecast-head">
+      <div>
+        <div class="fd-forecast-title">AI Forecast</div>
+        <div class="fd-forecast-sub">Public-data scenario range using fundamentals, valuation, CMP, and trend context.</div>
+      </div>
+      <button class="btn btn-green" id="forecastBtn-${key}" onclick="runAIForecast('${jsStr(sym)}','${jsStr(source)}')" style="font-size:10px;padding:6px 10px">Build Forecast</button>
+    </div>
+    <div class="fd-forecast-body" id="forecastBox-${key}">
+      <div class="fd-forecast-summary">Run forecast to generate conservative, base, and bull target scenarios. This is not a broker target.</div>
+    </div>
+  </div>`;
+}
+
+function forecastKey(sym, source = "fund") {
+  return `${source}-${String(sym || "").replace(/[^A-Za-z0-9_-]/g, "_")}`;
+}
+
+function buildForecastStockContext(sym, source = "fund") {
+  const fund = _lastFundScored.find(x => x.sym === sym) || allFundStocks().find(x => x.sym === sym) || {};
+  const holding = portfolio.find(x => x.sym === sym) || {};
+  const live = liveData[sym] || null;
+  const tech = source === "tech" && _spSym === sym ? _spD : live;
+  const cmp = fund.live?.cmp ?? live?.cmp ?? tech?.cmp ?? holding.cmp ?? null;
+  return {
+    sym,
+    name: fund.name || holding.name || stockMeta[sym]?.name || sym,
+    sector: fund.sec || getStockSectorLabel(holding, false) || stockMeta[sym]?.sector || "",
+    label: fund.label || (source === "tech" ? "Technical View" : "Portfolio Holding"),
+    score: fund.sc ?? null,
+    sc: fund.sc ?? null,
+    cmp,
+    chg1d: fund.live?.chg1d ?? live?.chg1d ?? tech?.chg1d ?? null,
+    chg1m: fund.live?.chg1m ?? live?.chg1m ?? tech?.chg1m ?? null,
+    maTrend: fund.live?.maTrend ?? live?.maTrend ?? tech?.maTrend ?? null,
+    mcapCr: fund.live?.mcapCr ?? fund.mcapCr ?? live?.mcapCr ?? null,
+    pe: fund.pe ?? fund.peOverride ?? null,
+    roe: fund.roe ?? null,
+    rev: fund.rev ?? null,
+    profit: fund.profit ?? null,
+    de: fund.de ?? null,
+    promoter: fund.promo ?? null,
+    promoterTrend: fund.promoT ?? null,
+    avgPrice: holding.avgPrice ?? null,
+    quantity: holding.qty ?? null,
+    portfolioReturnPct: holding.avgPrice && cmp ? (cmp - holding.avgPrice) / holding.avgPrice * 100 : null,
+    technicalBullCount: tech?.bullCount ?? live?.bullCount ?? null,
+    rsi: tech?.rsi ?? live?.rsi ?? null,
+    volRatio: tech?.volRatio ?? live?.volRatio ?? null,
+    note: fund.note || holding.notes || "",
+    reasons: fund.sc != null ? fundReasons(fund, getThresholds()) : "Limited forecast context outside fundamentals tab.",
+    dataGaps: fund.sc != null ? fundDataGaps(fund) : ["Full fundamentals not loaded for this stock view."]
+  };
+}
+
+async function runAIForecast(sym, source = "fund") {
+  const btn = document.getElementById(`forecastBtn-${forecastKey(sym, source)}`);
+  const box = document.getElementById(`forecastBox-${forecastKey(sym, source)}`);
   if (!box) return;
   if (btn) { btn.disabled = true; btn.textContent = "Building..."; }
   box.innerHTML = `<div class="ai-loading"><div class="ai-spinner"></div><span>Building AI forecast...</span></div>`;
   try {
-    const stock = {
-      sym: s.sym,
-      name: s.name,
-      sector: s.sec,
-      label: s.label,
-      score: s.sc,
-      sc: s.sc,
-      cmp: s.live?.cmp ?? null,
-      chg1d: s.live?.chg1d ?? null,
-      chg1m: s.live?.chg1m ?? null,
-      maTrend: s.live?.maTrend ?? null,
-      mcapCr: s.live?.mcapCr ?? s.mcapCr ?? null,
-      pe: s.pe,
-      roe: s.roe,
-      rev: s.rev,
-      profit: s.profit,
-      de: s.de,
-      promoter: s.promo,
-      promoterTrend: s.promoT,
-      note: s.note,
-      reasons: fundReasons(s, getThresholds()),
-      dataGaps: fundDataGaps(s)
-    };
+    const stock = buildForecastStockContext(sym, source);
     const res = await fetch("/.netlify/functions/forecast-stock", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2329,7 +2351,7 @@ async function runAIForecast(sym) {
     if (!d.ok) throw new Error(d.error || "Forecast failed");
     box.innerHTML = renderAIForecastOutput(d.forecast, d.mode);
   } catch(e) {
-    box.innerHTML = `<div class="insight-row" style="background:var(--red3)"><span class="insight-icon">!</span><span>Error: ${esc(e.message)} <button class="btn" onclick="runAIForecast('${jsStr(sym)}')" style="font-size:10px;margin-left:8px">Retry</button></span></div>`;
+    box.innerHTML = `<div class="insight-row" style="background:var(--red3)"><span class="insight-icon">!</span><span>Error: ${esc(e.message)} <button class="btn" onclick="runAIForecast('${jsStr(sym)}','${jsStr(source)}')" style="font-size:10px;margin-left:8px">Retry</button></span></div>`;
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "Rebuild Forecast"; }
   }
@@ -3362,6 +3384,8 @@ function openPortfolioAssistantDrawer(sym) {
           ${paMetric("Vol Ratio", live?.volRatio != null ? `${live.volRatio}x` : "Pending")}
         </div>
       </div>
+
+      ${forecastWidgetHTML(h.sym, "portfolio")}
 
       <div class="pa-section">
         <div class="pa-section-title">Next Actions</div>
@@ -6240,6 +6264,10 @@ function _spRenderStatic(sym, exch, d) {
     </div>
     <div id="spChartWrap" class="sp-chart-wrap">
       <div style="display:flex;align-items:center;justify-content:center;height:100%;gap:8px;color:var(--muted);font-size:12px"><div style="width:16px;height:16px;border:2px solid var(--bdr);border-top-color:var(--green);border-radius:50%;animation:spin 0.7s linear infinite"></div>Loading chart…</div>
+    </div>
+
+    <div class="sp-signals" style="padding-bottom:0">
+      ${forecastWidgetHTML(sym, "tech")}
     </div>
 
     ${d ? _spSignalsHTML(d) : ""}`;
