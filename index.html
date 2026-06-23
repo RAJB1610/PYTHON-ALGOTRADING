@@ -183,6 +183,8 @@ td { padding: 9px 10px; vertical-align: middle; }
 /* ── Cells ───────────────────────────────────────────────────────────────── */
 .sym-name { font-size: 13px; font-weight: 700; }
 .sym-sec  { font-size: 10px; color: #52627D; margin-top: 1px; font-weight:600; }
+.port-stock-open{border:0;background:transparent;color:var(--txt);font:inherit;font-size:13px;font-weight:800;padding:0;cursor:pointer;text-align:left;letter-spacing:.01em}
+.port-stock-open:hover{color:var(--blue);text-decoration:underline;text-underline-offset:2px}
 .cmp-val  { font-size: 13px; font-weight: 700; font-family: var(--mono); }
 .cmp-mc   { font-size: 10px; color: var(--muted); font-family: var(--mono); margin-top: 1px; }
 .chg { font-size: 11px; font-family: var(--mono); padding: 2px 6px; border-radius: 4px; white-space: nowrap; font-weight: 600; }
@@ -3081,6 +3083,7 @@ function renderPortfolio() {
   if (pagerEl) pagerEl.innerHTML = pagerHTML;
 
   const tbody = document.getElementById("portBody");
+  bindPortfolioRowClicks(tbody);
   tbody.innerHTML = "";
   pageRows.forEach(h => {
     const live     = liveData[h.sym];
@@ -3105,10 +3108,9 @@ function renderPortfolio() {
     tr.title = `Open ${h.sym} portfolio assistant`;
     tr.dataset.portSym = h.sym;
     tr.innerHTML = `
-      <td onclick="event.stopPropagation();openPortfolioAssistantDrawer('${jsStr(h.sym)}')" style="cursor:pointer">
+      <td data-port-open="${esc(h.sym)}" style="cursor:pointer">
         <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
-          <div class="sym-name">${h.sym}</div>
-          <button class="btn" style="font-size:10px;padding:2px 8px" onclick="event.stopPropagation();openPortfolioAssistantDrawer('${jsStr(h.sym)}')">Open</button>
+          <button type="button" class="port-stock-open" data-port-open="${esc(h.sym)}">${h.sym}</button>
         </div>
         ${yfHint}
       </td>
@@ -3128,13 +3130,28 @@ function renderPortfolio() {
       <td style="text-align:center"><button class="btn" style="font-size:10px;padding:2px 8px;color:var(--red)" onclick="event.stopPropagation();removeHolding('${h.sym}')">✕</button></td>`;
     tbody.appendChild(tr);
   });
-  tbody.onclick = e => {
-    if (e.target.closest("button, select, input, textarea, a")) return;
-    const row = e.target.closest("tr[data-port-sym]");
-    if (row?.dataset?.portSym) openPortfolioAssistantDrawer(row.dataset.portSym);
-  };
-
   renderRuleAnalysis(totalInvested, totalCurrent, totalPnL, pnlPct);
+}
+
+function bindPortfolioRowClicks(tbody) {
+  if (!tbody || tbody.dataset.portClickBound) return;
+  tbody.dataset.portClickBound = "1";
+  tbody.addEventListener("click", e => {
+    const target = e.target.closest("[data-port-open]");
+    const ignored = !target && e.target.closest("button, [data-port-ignore], select, input, textarea, a");
+    if (ignored) return;
+    const row = e.target.closest("tr[data-port-sym]");
+    const sym = target?.dataset?.portOpen || row?.dataset?.portSym;
+    if (!sym) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openPortfolioStock(sym);
+  }, true);
+}
+
+function openPortfolioStock(sym) {
+  if (!sym) return;
+  openPortfolioAssistantDrawer(String(sym).trim().toUpperCase());
 }
 
 function getStockSectorLabel(h, withFallback = true) {
